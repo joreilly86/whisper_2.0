@@ -8,3 +8,18 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environment variables
+.env
+
+# Raw input and output files
+*.raw
+*.wav
+*.mp3
+*.mp4
+*.m4a
+
+# Project-specific data files
+data/uploads/
+data/transcripts/
+data/summaries/
