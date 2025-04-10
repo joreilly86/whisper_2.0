@@ -1,0 +1,24 @@
+[project]
+name = "whisper-2-0"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # Core processing
+    "openai-whisper>=20230314", # Transcription
+    "pydub>=0.25.1",           # Audio manipulation
+    "torch>=2.0.0",            # Whisper dependency
+    "numpy>=1.24.2",           # Whisper dependency
+    "tqdm>=4.65.0",            # Whisper dependency
+    # Summarization
+    "openai>=1.0.0",           # OpenAI API
+    "anthropic>=0.5.0",        # Anthropic API
+    # Folder watching
+    "watchdog>=6.0.0",         # File system monitoring
+    # Configuration
+    "python-dotenv>=1.0.0",    # Loading .env files
+    # Database
+    "sqlalchemy>=2.0.9",       # ORM and database interaction
+    "greenlet>=3.0.0",         # Required by SQLAlchemy for async operations
+]
