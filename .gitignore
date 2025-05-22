@@ -1,25 +1,95 @@
-# Python-generated files
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[oc]
+*.so
+*.pyd
+*.dll
+
+# Distribution / packaging
 build/
 dist/
+*.egg-info/
 wheels/
-*.egg-info
+*.egg
+pip-wheel-metadata/
+share/python-wheels/
+*.manifest
+*.spec
 
-# Virtual environments
-.venv
+# Python Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
 
-# Environment variables
+# Environment variables - IMPORTANT: Never commit .env files with secrets
+.env
+.env.*
+!/.env.example  # Allow .env.example for template sharing
+
+# Uploaded audio files (user-specific, often large, or transient)
+# If you have specific example files you want to commit in uploads/,
+# you can add them with !uploads/your_example_file.mp3
+uploads/
+
+# Transcribed text files (generated output)
+transcriptions/
+
+# Temporary audio chunks (generated during processing)
+temp_audio_chunks/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# IDE / Editor specific
+.vscode/       # Visual Studio Code
+.idea/         # JetBrains IDEs (PyCharm, IntelliJ)
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store          # macOS
+Thumbs.db          # Windows
+._*                # macOS resource forks
+
+# Log files
+*.log
+logs/
+*.log.*
+
+# Coverage data
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+nosetests.xml
+
+# PyInstaller
+# Usually these files are in 'dist' folder
+*.manifest
+*.spec
+
+# dotenv
 .env
 
-# Raw input and output files
-*.raw
-*.wav
-*.mp3
-*.mp4
-*.m4a
+# Instance Folder (e.g. Flask instance-specific configs)
+instance/
+/instance/
 
-# Project-specific data files
-data/uploads/
-data/transcripts/
-data/summaries/
+# IPython
+profile_default/
+ipython_config.py
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# pytest
+.pytest_cache/
+.cache/
+
+# uv (though .venv usually covers it)
+.uv/

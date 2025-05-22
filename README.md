@@ -1,104 +1,141 @@
-# Meeting Notes Generator (Folder Watcher Version)
+# M4A Audio Transcriber
 
-A simple, local tool to automatically transcribe meeting recordings and generate well-organized meeting notes using Whisper and modern LLMs by monitoring a folder.
+This tool splits large M4A audio files into smaller MP3 chunks, transcribes each chunk using OpenAI's Whisper API, and then combines the transcriptions into a single text file.
 
-## Features
+The project includes:
+1.  `transcribe.py`: A script to manually transcribe a single audio file from the `uploads/` folder.
+2.  `watcher.py`: A script that monitors the `uploads/` folder and automatically triggers `transcribe.py` for newly added M4A files.
 
--   **Folder Monitoring**: Automatically processes audio files dropped into a designated `raw_audio` folder.
--   **Automatic Transcription**: Uses OpenAI's Whisper model locally.
--   **AI-Generated Meeting Notes**: Creates summaries with key points, action items, and decisions.
--   **Multiple AI Providers**: Supports OpenAI (GPT models) and Anthropic (Claude models) for summarization.
--   **Organized Output**: Saves transcripts and summaries to separate folders (`transcriptions`, `summaries`).
--   **Processed File Handling**: Moves original audio files to a `completed` folder after processing.
+Both scripts use an `uploads/` folder for input audio files and a `transcriptions/` folder for the output text files.
 
-## Requirements
+## Project Structure
 
--   Python 3.9+
--   **FFmpeg**: Must be installed and accessible system-wide or placed in the project's `bin` directory as configured.
--   **API Keys** (stored in `.env` file):
-    -   OpenAI API Key (for Whisper transcription and optional GPT summarization)
-    -   Anthropic API Key (optional, for Claude summarization)
+```
+.
+├── .env             # (User-created with API key after setup)
+├── .env.example     # (Template for .env)
+├── .gitignore
+├── .python-version
+├── .venv/           # (Python virtual environment, created during setup at root)
+├── pyproject.toml
+├── README.md
+├── requirements.txt # (Python dependencies)
+├── transcribe.py    # (The manual transcription script)
+├── watcher.py       # (The automatic folder watching script)
+├── uploads/         # (Directory for input M4A audio files)
+├── transcriptions/  # (Directory for output .txt transcript files)
+└── uv.lock
+```
+The `uploads/` and `transcriptions/` directories will be created automatically by the scripts if they don't exist.
 
-## Quick Start
+## Prerequisites
 
-1.  **Clone the repository**:
+Before you begin, ensure you have the following installed on your system:
+
+1.  **Python**: Version 3.8 or higher is recommended.
+2.  **`uv`**: This project uses `uv` for Python package and environment management. If you don't have it, please install it. (Follow instructions from [astral.sh/uv](https://astral.sh/uv)).
+3.  **FFmpeg**: This is required by `pydub` (a dependency of this tool) to process audio files (M4A to MP3 conversion).
+    *   Download FFmpeg from [ffmpeg.org](https://ffmpeg.org/download.html).
+    *   Ensure the FFmpeg executable is in your system's PATH. The `transcribe.py` script will show an error if it cannot find FFmpeg.
+
+## Setup
+
+1.  **Clone the Repository (if applicable) or Ensure Files are Present:**
+    Make sure you have all project files at the root directory.
+
+2.  **Navigate to the Project Root Directory:**
+    Open your terminal and ensure you are in the project's root directory (e.g., `c:/Users/joreilly/dev/whisper_2.0/`).
+
+3.  **Create and Activate Virtual Environment:**
+    Use `uv` to create a virtual environment in the project root:
     ```bash
-    git clone https://github.com/your-username/meeting-notes-generator.git
-    cd meeting-notes-generator
+    uv venv
+    ```
+    Activate the environment:
+    ```bash
+    # On Windows:
+    .\.venv\Scripts\activate
+    # On macOS/Linux:
+    # source .venv/bin/activate
+    ```
+    `uv` might automatically use the `.venv` in the current directory for subsequent commands.
+
+4.  **Install Dependencies:**
+    Install the required Python packages (including `openai`, `pydub`, `python-dotenv`, and `watchdog`) using `uv`:
+    ```bash
+    uv pip install -r requirements.txt
     ```
 
-2.  **Set up Virtual Environment & Install Dependencies**:
-    ```bash
-    # Create venv (replace 'python' with 'python3' if needed)
-    python -m venv .venv
-    # Activate (adjust for your shell)
-    # Windows CMD: .venv\Scripts\activate.bat
-    # Windows PowerShell: .venv\Scripts\Activate.ps1
-    # Linux/macOS: source .venv/bin/activate
-    source .venv/bin/activate
-
-    # Install dependencies using uv
-    uv pip install -r requirements.txt # Or use uv sync if pyproject.toml is primary
-    # If you don't have uv: pip install -r requirements.txt
-    ```
-    *(Note: If `requirements.txt` is outdated, generate it from `pyproject.toml` if needed or install directly from `pyproject.toml` using `uv pip install .`)*
-
-3.  **Configure Environment Variables**:
-    -   Create or edit the `.env` file in the project root.
-    -   Add your API keys:
-        ```dotenv
-        OPENAI_API_KEY="your-openai-api-key-here"
-        ANTHROPIC_API_KEY="your-anthropic-api-key-here"
+5.  **Set Up OpenAI API Key:**
+    *   Copy the example environment file:
+        ```bash
+        copy .env.example .env  # Windows
+        # cp .env.example .env    # macOS/Linux
         ```
-    -   Choose your default AI provider for summarization:
-        ```dotenv
-        DEFAULT_SUMMARY_MODEL="openai"  # or "anthropic"
+    *   Open the newly created `.env` file in a text editor.
+    *   Replace `your_key_here` with your actual OpenAI API key:
+        ```env
+        OPENAI_API_KEY=sk-yourActualOpenAIKeyGoesHere
         ```
-    -   Configure AI models and Whisper model size if desired (see Customization section).
+    *   Save the `.env` file.
 
-4.  **Place FFmpeg**:
-    -   Ensure `ffmpeg.exe` and `ffprobe.exe` are accessible. Either:
-        -   Install FFmpeg system-wide and add it to your PATH.
-        -   OR Download FFmpeg and place the `ffmpeg.exe` and `ffprobe.exe` files inside a `bin/ffmpeg-master-latest-win64-gpl/bin` subdirectory within the project root (as configured in the script).
+## Usage
 
-5.  **Run the Folder Watcher**:
+You have two ways to transcribe audio files:
+
+### Option 1: Automatic Processing with Folder Watcher (Recommended for ease of use)
+
+1.  **Start the Watcher:**
+    Run the `watcher.py` script from the project root (ensure your virtual environment is active or use `uv run`):
     ```bash
-    python folder_watcher.py
+    python watcher.py
     ```
-    The script will start monitoring the `raw_audio` folder.
+    Or:
+    ```bash
+    uv run python watcher.py
+    ```
+    The watcher will log that it has started and is monitoring the `uploads/` directory. Keep this terminal window open.
 
-## How It Works
+2.  **Add Audio Files:**
+    Simply drag and drop (or copy) your M4A audio files into the `uploads/` directory.
+    The watcher will detect new M4A files and automatically trigger `transcribe.py` for each one.
 
-1.  Run `python folder_watcher.py`.
-2.  Drop an audio file (MP3, WAV, M4A, FLAC) into the `raw_audio` folder located in the project directory.
-3.  The watcher detects the new file and starts processing:
-    -   **Transcription**: Converts audio to text using Whisper. Saves `.txt` and `.json` files to the `transcriptions` folder.
-    -   **Summarization**: Generates meeting notes using the configured AI provider (OpenAI or Anthropic). Saves `.txt` and `.json` files to the `summaries` folder.
-4.  Once both steps are complete (or if transcription fails), the original audio file is moved from `raw_audio` to the `completed` folder.
+3.  **Output:**
+    *   Logs from both `watcher.py` and `transcribe.py` will appear in the terminal where `watcher.py` is running.
+    *   Transcripts will be saved to the `transcriptions/` directory with matching filenames (e.g., `uploads/meeting.m4a` becomes `transcriptions/meeting.txt`).
 
-## Customization
+4.  **Stop the Watcher:**
+    Press `Ctrl+C` in the terminal where `watcher.py` is running.
 
-### AI Models for Summarization
+### Option 2: Manual Transcription of a Single File
 
-Configure your preferred models in the `.env` file:
+1.  **Place Audio File:**
+    Ensure your M4A audio file (e.g., `my_meeting.m4a`) is in the `uploads/` directory.
 
--   **OpenAI**:
-    -   `OPENAI_MODEL="gpt-4o"` (Default)
--   **Anthropic**:
-    -   `ANTHROPIC_MODEL="claude-3-haiku"` (Default)
-    -   Other options: `claude-3-sonnet`, `claude-3-opus`
+2.  **Run the Transcription Script:**
+    Execute `transcribe.py` from the project root, providing the **filename** of the audio file:
+    ```bash
+    python transcribe.py <audio_filename.m4a>
+    ```
+    **Example:**
+    ```bash
+    python transcribe.py my_meeting.m4a
+    ```
+    Or using `uv run`:
+    ```bash
+    uv run python transcribe.py my_meeting.m4a
+    ```
 
-Set `DEFAULT_SUMMARY_MODEL` in `.env` to `"openai"` or `"anthropic"`.
-
-### Transcription Model
-
--   The application uses Whisper's `medium` model by default.
--   Configure in `.env` with `WHISPER_MODEL_SIZE`.
--   Options: `tiny`, `base`, `small`, `medium`, `large`. Larger models are more accurate but slower and require more resources (VRAM if using GPU).
+3.  **Output:**
+    *   Progress logs from `transcribe.py` will appear in the console.
+    *   The transcript will be saved to the `transcriptions/` directory.
 
 ## Troubleshooting
 
--   **FFmpeg Not Found**: Ensure FFmpeg is correctly installed and accessible (either in PATH or in the project's `bin` directory as configured). Check the paths set in `folder_watcher.py`.
--   **API Key Errors**: Verify your `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` in the `.env` file are correct and have the necessary permissions/credits.
--   **Processing Errors**: Check the console output where `folder_watcher.py` is running for detailed error messages and tracebacks.
--   **Permissions**: Ensure the script has read/write permissions for the `raw_audio`, `transcriptions`, `summaries`, and `completed` folders.
+*   **FFmpeg Not Found:** Ensure FFmpeg is installed and its `bin` directory is in your system's PATH.
+*   **OpenAI API Key Not Found:** Check your `.env` file at the project root.
+*   **File Not Found (for `transcribe.py` manual mode):** Ensure the audio file exists in `uploads/` and you're providing only the filename.
+*   **Watcher Not Detecting Files:**
+    *   Verify `watcher.py` is running and monitoring the correct `uploads/` directory.
+    *   Ensure files are M4A (currently, only `.m4a` is processed by the watcher).
+*   **Permission Errors:** Ensure write permissions for `uploads/`, `transcriptions/`, and `temp_audio_chunks/`.
