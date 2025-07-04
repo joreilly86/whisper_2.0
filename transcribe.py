@@ -7,7 +7,7 @@ import math
 import shutil
 import argparse
 from dotenv import load_dotenv
-from openai import OpenAI
+import google.generativeai as genai
 from pydub import AudioSegment
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -21,14 +21,21 @@ RAW_TRANSCRIPTIONS_DIR = os.path.join(TRANSCRIPTIONS_DIR, "raw")
 TEMP_CHUNK_SUBDIR = "temp_audio_chunks" # Relative to project root
 POST_PROCESSING_PROMPT_FILE = "post_processing_prompt.txt"
 
+import google.generativeai as genai
+
 # Load environment variables
 load_dotenv()
-api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
+openai_api_key = os.getenv("OPENAI_API_KEY")
+gemini_api_key = os.getenv("GEMINI_API_KEY")
+
+if not openai_api_key:
     print("Error: OPENAI_API_KEY not found in .env file or environment variables.")
     sys.exit(1)
 
-client = OpenAI(api_key=api_key)
+client = OpenAI(api_key=openai_api_key)
+
+if gemini_api_key:
+    genai.configure(api_key=gemini_api_key)
 
 def estimate_segment_duration_ms(audio_duration_ms, audio_channels, target_bitrate_kbps_str, max_size_bytes):
     try:
@@ -53,25 +60,35 @@ def estimate_segment_duration_ms(audio_duration_ms, audio_channels, target_bitra
     return min(estimated_chunk_duration_ms, audio_duration_ms)
 
 def post_process_transcript(raw_transcript, prompt_text):
-    print("Post-processing transcript with GPT-4...")
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": prompt_text
-                },
-                {
-                    "role": "user",
-                    "content": raw_transcript
-                }
-            ]
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"Error during post-processing with GPT-4: {e}")
-        return f"[Post-processing failed. Raw transcript below]\n\n{raw_transcript}"
+    if gemini_api_key:
+        print("Post-processing transcript with Gemini 1.5 Pro...")
+        try:
+            model = genai.GenerativeModel('gemini-1.5-pro-latest')
+            response = model.generate_content(prompt_text + "\n\n" + raw_transcript)
+            return response.text.strip()
+        except Exception as e:
+            print(f"Error during post-processing with Gemini: {e}")
+            return f"[Post-processing failed. Raw transcript below]\n\n{raw_transcript}"
+    else:
+        print("Post-processing transcript with GPT-4...")
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": prompt_text
+                    },
+                    {
+                        "role": "user",
+                        "content": raw_transcript
+                    }
+                ]
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"Error during post-processing with GPT-4: {e}")
+            return f"[Post-processing failed. Raw transcript below]\n\n{raw_transcript}"
 
 def process_audio_file(input_file_path):
     base_name, input_ext_with_dot = os.path.splitext(os.path.basename(input_file_path))
