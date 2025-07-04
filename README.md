@@ -1,49 +1,144 @@
-# Local Transcription Service
+# Voice Note Transcription & Notion Integration
 
-This tool provides an automated pipeline for transcribing audio files. It watches a specified folder for new audio files (MP3 or M4A), transcribes them using OpenAI's Whisper API, and then post-processes the transcript into a structured format using a GPT-4 model.
+An efficient, automated pipeline for transcribing voice notes and saving structured meeting minutes to Notion. Supports configurable scheduling for different meeting loads.
 
-## Features
+## ✨ Features
 
-*   **Automated Transcription:** Runs in the background and automatically processes new audio files.
-*   **Custom Watch Folder:** Can be configured to watch any folder on your system.
-*   **Post-processing:** Cleans up raw transcripts into a polished, professional format.
-*   **Backup Raw Transcripts:** Saves a copy of the raw, unedited transcript for your records.
+- **🎤 Automatic Transcription**: Uses OpenAI Whisper for high-quality audio transcription
+- **🤖 AI Summarization**: Gemini (with OpenAI fallback) creates structured meeting minutes
+- **📝 Notion Integration**: Automatically saves results to your Notion database
+- **📅 Flexible Scheduling**: Configure processing frequency based on your meeting load
+- **🔔 Desktop Notifications**: Get notified of successful processing or errors
+- **⚡ Resource Efficient**: Only runs when needed, not continuously
+- **🔒 Secure**: Uses environment variables for API keys
 
-## Setup
+## 🚀 Quick Start
 
-1.  **Install FFmpeg:** This is required for audio processing. You can download it from [ffmpeg.org](https://ffmpeg.org/download.html) and add it to your system's PATH.
-2.  **Set Up API Key:** Copy the `.env.example` file to a new file named `.env` and add your OpenAI API key.
+### 1. Install Dependencies
+```bash
+# Using UV (recommended)
+uv sync
 
-## How to Use
-
-### The Golden Rule: Start the Watcher First!
-
-This tool works by watching a folder in real-time. For it to see and process a new file, the script must already be running.
-
-### Daily Workflow
-
-1.  **Start the Transcription Service:**
-    *   Double-click the `transcribe.bat` file. A terminal window will open, indicating that the script is now watching the default `uploads` folder.
-    *   **Keep this window open.** The service will stop if you close it.
-
-2.  **Add Your Audio Files:**
-    *   Save, copy, or drag your `.mp3` or `.m4a` files into the folder being watched.
-
-3.  **Get Your Transcripts:**
-    *   The script will automatically detect the new file and begin processing.
-    *   A raw, unedited transcript will be saved in the `transcriptions/raw` folder.
-    *   The final, post-processed meeting minutes will be saved in the main `transcriptions` folder.
-
-### Watching a Specific Folder
-
-If you want to watch a folder other than the default `uploads` directory (for example, your `Voice Notes` folder), you can create a shortcut to the `transcribe.bat` file. In the shortcut's properties, edit the "Target" field and add the full path to the folder you want to watch.
-
-**Example Target:**
-
-```
-C:\Users\joreilly\dev\whisper_2.0\transcribe.bat "C:\Users\joreilly\OneDrive - Knight Piesold\Voice Notes"
+# Or using pip
+pip install -r requirements.txt
 ```
 
-## Customizing the Output
+### 2. Configure Environment
+Copy `.env.example` to `.env` and add your API keys:
+```env
+OPENAI_API_KEY=your_openai_key_here
+GEMINI_API_KEY=your_gemini_key_here
+NOTION_API_KEY=your_notion_integration_secret
+NOTION_DATABASE_ID=your_database_id
+VOICE_NOTES_FOLDER=G:\My Drive\Voice Notes
+```
 
-You can change the post-processing instructions by editing the `post_processing_prompt.txt` file. This allows you to tailor the final output to your specific needs.
+### 3. Test the System
+```bash
+uv run test_voice_system.py
+```
+
+### 4. Set Up Automated Processing
+```bash
+uv run setup_scheduled_task.py
+```
+
+## 📊 Schedule Profiles
+
+Configure different processing frequencies in your `.env` file:
+
+### High Meeting Days (every 5 minutes)
+```env
+SCHEDULE_PROFILE=high_frequency
+SCHEDULE_INTERVAL=5
+```
+
+### Normal Days (every 15 minutes) - Default
+```env
+SCHEDULE_PROFILE=normal_frequency
+SCHEDULE_INTERVAL=15
+```
+
+### Light Meeting Days (every 30 minutes)
+```env
+SCHEDULE_PROFILE=low_frequency
+SCHEDULE_INTERVAL=30
+```
+
+### Manual Processing Only
+```env
+SCHEDULE_PROFILE=manual_only
+SCHEDULE_INTERVAL=0
+```
+
+### Extended Hours (7 AM - 7 PM)
+```env
+SCHEDULE_PROFILE=extended_hours
+SCHEDULE_INTERVAL=10
+SCHEDULE_START_TIME=07:00
+SCHEDULE_END_TIME=19:00
+```
+
+## 🛠️ Usage
+
+### Automatic Processing (Recommended)
+1. Configure your schedule profile in `.env`
+2. Run: `uv run setup_scheduled_task.py`
+3. Drop voice notes into your configured folder
+4. Get notifications when processing completes
+
+### Manual Processing
+```bash
+# Process new files only
+uv run process_voice_notes.py
+
+# Process all files (including previously processed)
+uv run process_voice_notes.py --all
+
+# Process specific folder
+uv run process_voice_notes.py --folder "C:\path\to\audio\files"
+```
+
+## 🔧 Scripts Overview
+
+| Script | Purpose |
+|--------|---------|
+| `process_voice_notes.py` | Main processing script (on-demand) |
+| `setup_scheduled_task.py` | Configure Windows Task Scheduler |
+| `test_voice_system.py` | Test all system components |
+| `test_notification.py` | Test notification system |
+| `transcribe.py` | Legacy continuous monitoring (deprecated) |
+
+## 📋 Supported Audio Formats
+
+- MP3 (.mp3)
+- M4A (.m4a) 
+- WAV (.wav)
+- FLAC (.flac)
+- OGG (.ogg)
+
+## 🔒 Security Notes
+
+- ⚠️ **Never commit your `.env` file** - it contains sensitive API keys
+- 🔐 Use environment variables for all secrets
+- 🛡️ Keep your repository private if using real API keys
+- 🔄 Rotate API keys if accidentally exposed
+
+## 🏗️ Architecture
+
+```
+Voice Note → Whisper Transcription → AI Summarization → Notion Database
+     ↓              ↓                      ↓               ↓
+  Audio File    Raw Transcript      Structured Summary   Meeting Entry
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Test your changes with `uv run test_voice_system.py`
+4. Submit a pull request
+
+## 📄 License
+
+Private repository for Knight Piesold internal use.
