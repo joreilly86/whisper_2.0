@@ -26,7 +26,7 @@ def load_schedule_config():
 
 
 def calculate_duration(start_time, end_time):
-    """Calculate duration between start and end times."""
+    """Calculate duration between start and end times in HH:MM format."""
     start = datetime.strptime(start_time, "%H:%M")
     end = datetime.strptime(end_time, "%H:%M")
 
@@ -37,7 +37,7 @@ def calculate_duration(start_time, end_time):
     hours = int(duration.total_seconds() // 3600)
     minutes = int((duration.total_seconds() % 3600) // 60)
 
-    return f"PT{hours}H{minutes}M"
+    return f"{hours:04d}:{minutes:02d}"
 
 
 def setup_scheduled_task():
