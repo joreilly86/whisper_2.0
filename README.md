@@ -26,7 +26,7 @@ OPENAI_API_KEY=your_openai_key_here
 GEMINI_API_KEY=your_gemini_key_here
 NOTION_API_KEY=your_notion_integration_secret
 NOTION_DATABASE_ID=your_database_id
-VOICE_NOTES_FOLDER=G:\My Drive\Voice Notes
+VOICE_NOTES_FOLDER=your_voice_notes_folder_path_here
 ```
 
 ### 3. Test System
