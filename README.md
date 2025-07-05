@@ -1,26 +1,22 @@
 # Voice Note Transcription & Notion Integration
 
-An efficient, automated pipeline for transcribing voice notes and saving structured meeting minutes to Notion. Supports configurable scheduling for different meeting loads.
+Efficient, automated pipeline for transcribing voice notes and saving structured meeting minutes to Notion with configurable scheduling.
 
-## ✨ Features
+## Features
 
-- **🎤 Automatic Transcription**: Uses OpenAI Whisper for high-quality audio transcription
-- **🤖 AI Summarization**: Gemini (with OpenAI fallback) creates structured meeting minutes
-- **📝 Notion Integration**: Automatically saves results to your Notion database
-- **📅 Flexible Scheduling**: Configure processing frequency based on your meeting load
-- **🔔 Desktop Notifications**: Get notified of successful processing or errors
-- **⚡ Resource Efficient**: Only runs when needed, not continuously
-- **🔒 Secure**: Uses environment variables for API keys
+- **🎤 Automatic Transcription**: OpenAI Whisper with intelligent audio chunking
+- **🤖 AI Summarization**: Gemini (with OpenAI fallback) for structured meeting minutes
+- **📝 Notion Integration**: Automatic database entries with title and date
+- **📅 Flexible Scheduling**: Configure processing frequency based on meeting load
+- **🔔 Desktop Notifications**: Real-time feedback on processing status
+- **⚡ Resource Efficient**: Only runs when needed, completely hidden background operation
+- **🔒 Secure**: Environment variable configuration for all API keys
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Install Dependencies
 ```bash
-# Using UV (recommended)
 uv sync
-
-# Or using pip
-pip install -r requirements.txt
 ```
 
 ### 2. Configure Environment
@@ -33,17 +29,18 @@ NOTION_DATABASE_ID=your_database_id
 VOICE_NOTES_FOLDER=G:\My Drive\Voice Notes
 ```
 
-### 3. Test the System
+### 3. Test System
 ```bash
-uv run test_voice_system.py
+uv run tests/test_voice_system.py
+uv run tests/test_notification.py
 ```
 
 ### 4. Set Up Automated Processing
 ```bash
-uv run setup_scheduled_task.py
+uv run scripts/setup_scheduled_task.py
 ```
 
-## 📊 Schedule Profiles
+## Schedule Profiles
 
 Configure different processing frequencies in your `.env` file:
 
@@ -79,37 +76,44 @@ SCHEDULE_START_TIME=07:00
 SCHEDULE_END_TIME=19:00
 ```
 
-## 🛠️ Usage
+## Usage
 
 ### Automatic Processing (Recommended)
 1. Configure your schedule profile in `.env`
-2. Run: `uv run setup_scheduled_task.py`
+2. Run: `uv run scripts/setup_scheduled_task.py`
 3. Drop voice notes into your configured folder
 4. Get notifications when processing completes
 
 ### Manual Processing
 ```bash
 # Process new files only
-uv run process_voice_notes.py
+uv run scripts/process_voice_notes.py
 
 # Process all files (including previously processed)
-uv run process_voice_notes.py --all
+uv run scripts/process_voice_notes.py --all
 
 # Process specific folder
-uv run process_voice_notes.py --folder "C:\path\to\audio\files"
+uv run scripts/process_voice_notes.py --folder "C:\path\to\audio\files"
 ```
 
-## 🔧 Scripts Overview
+## Project Structure
 
-| Script | Purpose |
-|--------|---------|
-| `process_voice_notes.py` | Main processing script (on-demand) |
-| `setup_scheduled_task.py` | Configure Windows Task Scheduler |
-| `test_voice_system.py` | Test all system components |
-| `test_notification.py` | Test notification system |
-| `transcribe.py` | Legacy continuous monitoring (deprecated) |
+```
+whisper_2.0/
+├── README.md                           # This file
+├── pyproject.toml                      # Project dependencies
+├── .env.example                        # Environment configuration template
+├── post_processing_prompt.txt          # AI summarization instructions
+├── process_voice_notes_hidden.vbs      # Hidden background scheduler
+├── scripts/
+│   ├── process_voice_notes.py          # Main processing script
+│   └── setup_scheduled_task.py         # Windows Task Scheduler setup
+└── tests/
+    ├── test_voice_system.py            # System component tests
+    └── test_notification.py            # Notification system test
+```
 
-## 📋 Supported Audio Formats
+## Supported Audio Formats
 
 - MP3 (.mp3)
 - M4A (.m4a) 
@@ -117,14 +121,7 @@ uv run process_voice_notes.py --folder "C:\path\to\audio\files"
 - FLAC (.flac)
 - OGG (.ogg)
 
-## 🔒 Security Notes
-
-- ⚠️ **Never commit your `.env` file** - it contains sensitive API keys
-- 🔐 Use environment variables for all secrets
-- 🛡️ Keep your repository private if using real API keys
-- 🔄 Rotate API keys if accidentally exposed
-
-## 🏗️ Architecture
+## How It Works
 
 ```
 Voice Note → Whisper Transcription → AI Summarization → Notion Database
@@ -132,13 +129,45 @@ Voice Note → Whisper Transcription → AI Summarization → Notion Database
   Audio File    Raw Transcript      Structured Summary   Meeting Entry
 ```
 
-## 🤝 Contributing
+1. **Audio Processing**: Files are automatically chunked for optimal Whisper processing
+2. **Transcription**: OpenAI Whisper converts speech to text with high accuracy
+3. **Summarization**: Custom engineering-focused prompt creates structured meeting minutes
+4. **Storage**: Results saved to Notion with proper formatting and metadata
+5. **Tracking**: Processed files logged to prevent duplicate processing
 
-1. Fork the repository
-2. Create a feature branch
-3. Test your changes with `uv run test_voice_system.py`
-4. Submit a pull request
+## Customization
 
-## 📄 License
+### AI Summarization
+Edit `post_processing_prompt.txt` to customize the meeting minute format and focus areas.
 
-Private repository for Knight Piesold internal use.
+### Schedule Changes
+1. Edit your `.env` file
+2. Comment/uncomment desired profile
+3. Run: `uv run scripts/setup_scheduled_task.py`
+
+## Troubleshooting
+
+### Test Individual Components
+```bash
+uv run tests/test_voice_system.py
+```
+
+### Check Scheduled Task
+- Open Task Scheduler (`taskschd.msc`)
+- Look for "ProcessVoiceNotes" task
+- Check execution history
+
+### Manual Cancellation
+- **Ctrl+C**: Clean interrupt with proper cleanup
+- **Close Terminal**: Force stop (files still cleaned up)
+
+## Security
+
+- ⚠️ Never commit your `.env` file
+- 🔐 Use environment variables for all secrets
+- 🛡️ Keep repository private
+- 🔄 Rotate API keys if exposed
+
+## License
+
+Private repository for internal use.

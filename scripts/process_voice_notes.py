@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-On-demand voice note processor - run when needed, not continuously.
+Voice Note Processor - Efficient on-demand transcription and Notion integration.
 Usage: python process_voice_notes.py [--folder path] [--all]
 """
 

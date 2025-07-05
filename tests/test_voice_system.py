@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test script for voice note monitoring system components."""
+"""Test suite for voice note monitoring system components."""
 
 import os
 import sys
@@ -12,23 +12,30 @@ from openai import OpenAI
 # Load environment variables
 load_dotenv()
 
+
 def test_environment_variables():
     """Test if all required environment variables are set."""
     print("🔍 Testing environment variables...")
-    
-    required_vars = ['OPENAI_API_KEY', 'NOTION_API_KEY', 'NOTION_DATABASE_ID', 'VOICE_NOTES_FOLDER']
+
+    required_vars = [
+        "OPENAI_API_KEY",
+        "NOTION_API_KEY",
+        "NOTION_DATABASE_ID",
+        "VOICE_NOTES_FOLDER",
+    ]
     missing = []
-    
+
     for var in required_vars:
         if not os.getenv(var):
             missing.append(var)
-    
+
     if missing:
         print(f"❌ Missing environment variables: {', '.join(missing)}")
         return False
     else:
         print("✅ All environment variables are set")
         return True
+
 
 def test_openai_connection():
     """Test OpenAI API connection."""
@@ -39,7 +46,7 @@ def test_openai_connection():
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": "Say 'test successful'"}],
-            max_tokens=10
+            max_tokens=10,
         )
         print("✅ OpenAI connection successful")
         return True
@@ -47,33 +54,37 @@ def test_openai_connection():
         print(f"❌ OpenAI connection failed: {e}")
         return False
 
+
 def test_notion_connection():
     """Test Notion API connection."""
     print("\n🔍 Testing Notion connection...")
     try:
         notion = Client(auth=os.getenv("NOTION_API_KEY"))
         database_id = os.getenv("NOTION_DATABASE_ID")
-        
+
         # Try to retrieve database info
         database = notion.databases.retrieve(database_id)
-        print(f"✅ Notion connection successful. Database: {database['title'][0]['plain_text']}")
+        print(
+            f"✅ Notion connection successful. Database: {database['title'][0]['plain_text']}"
+        )
         return True
     except Exception as e:
         print(f"❌ Notion connection failed: {e}")
         return False
 
+
 def test_gemini_connection():
     """Test Gemini API connection (optional)."""
     print("\n🔍 Testing Gemini connection...")
     gemini_key = os.getenv("GEMINI_API_KEY")
-    
+
     if not gemini_key:
         print("⚠️  GEMINI_API_KEY not set (this is optional)")
         return True
-    
+
     try:
         genai.configure(api_key=gemini_key)
-        model = genai.GenerativeModel('gemini-1.5-pro-latest')
+        model = genai.GenerativeModel("gemini-1.5-pro-latest")
         response = model.generate_content("Say 'test successful'")
         print("✅ Gemini connection successful")
         return True
@@ -81,21 +92,23 @@ def test_gemini_connection():
         print(f"❌ Gemini connection failed: {e}")
         return False
 
+
 def test_folder_access():
     """Test access to voice notes folder."""
     print("\n🔍 Testing voice notes folder access...")
     folder = os.getenv("VOICE_NOTES_FOLDER")
-    
+
     if not os.path.exists(folder):
         print(f"❌ Voice notes folder does not exist: {folder}")
         return False
-    
+
     if not os.access(folder, os.R_OK):
         print(f"❌ No read access to voice notes folder: {folder}")
         return False
-    
+
     print(f"✅ Voice notes folder accessible: {folder}")
     return True
+
 
 def test_notion_write():
     """Test writing to Notion database."""
@@ -103,11 +116,11 @@ def test_notion_write():
     try:
         notion = Client(auth=os.getenv("NOTION_API_KEY"))
         database_id = os.getenv("NOTION_DATABASE_ID")
-        
+
         # Create a test entry
         test_title = f"Test Entry - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         meeting_date = datetime.now().strftime("%Y-%m-%d")
-        
+
         response = notion.pages.create(
             parent={"database_id": database_id},
             properties={
@@ -119,46 +132,57 @@ def test_notion_write():
                     "object": "block",
                     "type": "paragraph",
                     "paragraph": {
-                        "rich_text": [{"type": "text", "text": {"content": "This is a test entry created by the voice note monitoring system test script."}}]
-                    }
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": {
+                                    "content": "This is a test entry created by the voice note monitoring system test script."
+                                },
+                            }
+                        ]
+                    },
                 }
-            ]
+            ],
         )
-        
+
         print(f"✅ Successfully created test entry in Notion: {test_title}")
         return True
     except Exception as e:
         print(f"❌ Failed to write to Notion: {e}")
         return False
 
+
 def main():
     """Run all tests."""
     print("🧪 Voice Note Monitoring System Test Suite")
     print("=" * 50)
-    
+
     tests = [
         test_environment_variables,
         test_openai_connection,
         test_notion_connection,
         test_gemini_connection,
         test_folder_access,
-        test_notion_write
+        test_notion_write,
     ]
-    
+
     passed = 0
     total = len(tests)
-    
+
     for test in tests:
         if test():
             passed += 1
-    
+
     print("\n" + "=" * 50)
     print(f"📊 Test Results: {passed}/{total} tests passed")
-    
+
     if passed == total:
         print("🎉 All tests passed! Your system is ready to use.")
     else:
-        print("⚠️  Some tests failed. Please fix the issues above before running the voice note monitor.")
+        print(
+            "⚠️  Some tests failed. Please fix the issues above before running the voice note monitor."
+        )
+
 
 if __name__ == "__main__":
     main()

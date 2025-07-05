@@ -6,7 +6,8 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git config:*)",
-      "Bash(uv run:*)"
+      "Bash(uv run:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }
