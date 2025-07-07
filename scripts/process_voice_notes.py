@@ -27,6 +27,7 @@ MAX_CHUNK_SIZE_BYTES = 24.5 * 1024 * 1024  # 24.5 MB
 TARGET_BITRATE_KBPS = "192k"
 TEMP_CHUNK_SUBDIR = "temp_voice_chunks"
 POST_PROCESSING_PROMPT_FILE = "post_processing_prompt.txt"
+BACKUP_FOLDER = "transcription_backups"
 
 # Initialize API clients
 openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -238,6 +239,36 @@ def summarize_with_openai(text):
         return None
 
 
+def save_backup_markdown(title, content, original_filename):
+    """Save a local markdown backup of the transcription."""
+    try:
+        # Create backup folder if it doesn't exist
+        os.makedirs(BACKUP_FOLDER, exist_ok=True)
+        
+        # Create filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        backup_filename = f"{timestamp}_{safe_title}.md"
+        backup_path = os.path.join(BACKUP_FOLDER, backup_filename)
+        
+        # Create markdown content
+        markdown_content = f"# {title}\n\n"
+        markdown_content += f"**Original File:** {original_filename}\n"
+        markdown_content += f"**Processed:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        markdown_content += "---\n\n"
+        markdown_content += content
+        
+        # Save to file
+        with open(backup_path, "w", encoding="utf-8") as f:
+            f.write(markdown_content)
+        
+        print(f"💾 Backup saved: {backup_filename}")
+        return backup_path
+    except Exception as e:
+        print(f"Warning: Failed to save backup: {e}")
+        return None
+
+
 def add_to_notion(title, content):
     """Add summarized content to Notion database."""
     print(f"Adding '{title}' to Notion...")
@@ -267,6 +298,42 @@ def add_to_notion(title, content):
         return None
 
 
+def is_temp_file(file_path):
+    """Check if a file is likely a temporary recording in progress."""
+    filename = os.path.basename(file_path).lower()
+    
+    # Common temp file patterns
+    temp_patterns = [
+        'temp',
+        'tmp',
+        'recording',
+        'rec_',
+        '.part',
+        '.tmp',
+        '~',
+        'untitled',
+        'new recording',
+        'voice memo'
+    ]
+    
+    # Check if filename contains temp patterns
+    for pattern in temp_patterns:
+        if pattern in filename:
+            return True
+    
+    # Check if file was modified very recently (within last 30 seconds)
+    # This catches files that might still be actively recording
+    try:
+        file_mtime = os.path.getmtime(file_path)
+        current_time = datetime.now().timestamp()
+        if current_time - file_mtime < 30:  # 30 seconds
+            return True
+    except OSError:
+        pass
+    
+    return False
+
+
 def find_unprocessed_files(folder_path, processed_log="processed_files.txt"):
     """Find audio files that haven't been processed yet."""
     audio_extensions = (".mp3", ".wav", ".m4a", ".flac", ".ogg")
@@ -283,8 +350,14 @@ def find_unprocessed_files(folder_path, processed_log="processed_files.txt"):
         pattern = os.path.join(folder_path, f"*{ext}")
         all_files.extend(glob.glob(pattern))
 
-    # Filter out already processed files
-    unprocessed = [f for f in all_files if f not in processed_files]
+    # Filter out already processed files and temp files
+    unprocessed = []
+    for f in all_files:
+        if f not in processed_files:
+            if is_temp_file(f):
+                print(f"⏳ Skipping temp file: {os.path.basename(f)}")
+            else:
+                unprocessed.append(f)
 
     return unprocessed, processed_log
 
@@ -318,8 +391,12 @@ def process_file(file_path, processed_log):
             print("Both AI services failed, using raw transcript...")
             summary = transcript
 
-        # Step 3: Add to Notion
+        # Step 3: Save backup markdown
         title = os.path.splitext(os.path.basename(file_path))[0]
+        original_filename = os.path.basename(file_path)
+        backup_path = save_backup_markdown(title, summary, original_filename)
+        
+        # Step 4: Add to Notion
         result = add_to_notion(title, summary)
 
         if result:
@@ -330,6 +407,8 @@ def process_file(file_path, processed_log):
         else:
             error_msg = "Failed to add to Notion"
             print(f"❌ {error_msg}")
+            if backup_path:
+                print(f"💾 Backup still saved at: {backup_path}")
             show_error_notification(title, error_msg)
             return False
 
@@ -362,10 +441,19 @@ def main():
     if args.all:
         # Process all audio files
         audio_extensions = (".mp3", ".wav", ".m4a", ".flac", ".ogg")
-        files_to_process = []
+        all_files = []
         for ext in audio_extensions:
             pattern = os.path.join(args.folder, f"*{ext}")
-            files_to_process.extend(glob.glob(pattern))
+            all_files.extend(glob.glob(pattern))
+        
+        # Filter out temp files
+        files_to_process = []
+        for f in all_files:
+            if is_temp_file(f):
+                print(f"⏳ Skipping temp file: {os.path.basename(f)}")
+            else:
+                files_to_process.append(f)
+        
         processed_log = "processed_files_all.txt"
     else:
         # Process only unprocessed files
@@ -376,14 +464,40 @@ def main():
         return
 
     print(f"📁 Found {len(files_to_process)} files to process")
+    
+    # Show files and get confirmation
+    print("\nFiles to process:")
+    for i, file_path in enumerate(files_to_process, 1):
+        print(f"{i}. {os.path.basename(file_path)}")
+    
+    confirmed_files = []
+    print("\nConfirm processing for each file:")
+    for file_path in files_to_process:
+        filename = os.path.basename(file_path)
+        while True:
+            response = input(f"Process '{filename}'? (y/n): ").strip().lower()
+            if response in ['y', 'yes']:
+                confirmed_files.append(file_path)
+                break
+            elif response in ['n', 'no']:
+                print(f"Skipping '{filename}'")
+                break
+            else:
+                print("Please enter 'y' or 'n'")
+    
+    if not confirmed_files:
+        print("No files selected for processing")
+        return
+    
+    print(f"\n🚀 Processing {len(confirmed_files)} confirmed files...")
 
     success_count = 0
-    for file_path in files_to_process:
+    for file_path in confirmed_files:
         if process_file(file_path, processed_log):
             success_count += 1
 
     print(
-        f"\n📊 Results: {success_count}/{len(files_to_process)} files processed successfully"
+        f"\n📊 Results: {success_count}/{len(confirmed_files)} files processed successfully"
     )
 
     # Show summary notification
