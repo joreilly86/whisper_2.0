@@ -1,6 +1,7 @@
 # Voice Note Transcription & Notion Integration
 
-Manual queue-based pipeline for transcribing voice notes and saving structured meeting minutes to Notion with markdown backups.
+Manual queue-based pipeline for transcribing voice notes and saving structured meeting minutes to Notion with markdown backups.  
+
 If you're here as a [Flocode](https://flocode.substack.com/) subscriber - welcome 👋
 
 ## Features
