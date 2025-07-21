@@ -1,10 +1,11 @@
 # Voice Note Transcription & Notion Integration
 
 Manual queue-based pipeline for transcribing voice notes and saving structured meeting minutes to Notion with markdown backups.
+If you're here as a [Flocode](https://flocode.substack.com/) subscriber - welcome 👋
 
 ## Features
 
-- **🎤 Manual Transcription**: OpenAI Whisper with intelligent audio chunking
+- **🎤 Manual Transcription**: Groq (whisper-large-v3-turbo) and/or OpenAI Whisper with intelligent audio chunking
 - **🤖 AI Summarization**: Gemini (with OpenAI fallback) for structured meeting minutes
 - **📝 Notion Integration**: Manual database entries with title and date
 - **📋 Queue Management**: Add files or URLs to a processing queue
@@ -165,4 +166,6 @@ uv run scripts/process_voice_notes.py --clear-queue
 
 ## License
 
-Private repository for internal use.
+MIT
+
+> 📢 Visit https://flocode.substack.com/ for more engineering tools.
