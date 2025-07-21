@@ -1,0 +1,5 @@
+# Voice Note Processing Queue
+# Format: file_path_or_url
+# Lines starting with # are comments
+
+"G:\My Drive\Voice Notes\Powerhouse 003 -  2025-07-08 at 14h29m52s.mp3"

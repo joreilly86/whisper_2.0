@@ -7,7 +7,14 @@
       "Bash(git commit:*)",
       "Bash(git config:*)",
       "Bash(uv run:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(python:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(touch:*)",
+      "Bash(where:*)",
+      "Bash(schtasks:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }
