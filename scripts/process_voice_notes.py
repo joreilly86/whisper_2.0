@@ -10,12 +10,9 @@ import math
 import os
 import shutil
 import sys
-import threading
 import time
 import urllib.request
 from datetime import datetime
-from pathlib import Path
-from queue import Queue
 
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -23,7 +20,6 @@ from notion_client import Client
 from openai import OpenAI
 from plyer import notification
 from pydub import AudioSegment
-from pydub.utils import which
 import groq
 
 # Load environment variables
@@ -34,7 +30,7 @@ AudioSegment.converter = "ffmpeg"
 AudioSegment.ffmpeg = "ffmpeg"
 AudioSegment.ffprobe = "ffprobe"
 
-# Configuration
+# Configuration Constants
 MAX_CHUNK_SIZE_BYTES = 24.5 * 1024 * 1024  # 24.5 MB
 TARGET_BITRATE_KBPS = "192k"
 TEMP_CHUNK_SUBDIR = "temp_voice_chunks"
@@ -42,7 +38,23 @@ POST_PROCESSING_PROMPT_FILE = "post_processing_prompt.txt"
 BACKUP_FOLDER = "transcription_backups"
 QUEUE_FILE = "processing_queue.txt"
 TEMP_DOWNLOAD_DIR = "temp_downloads"
-DEFAULT_VOICE_FOLDER = r"G:\My Drive\Voice Notes"
+DEFAULT_VOICE_FOLDER = os.getenv("VOICE_NOTES_FOLDER", r"G:\My Drive\Voice Notes")
+
+# Notion Configuration
+NOTION_MAX_CHUNK_SIZE = 2000  # Characters per block
+NOTION_TIMEOUT = 10  # Seconds
+
+# File Detection Constants
+TEMP_FILE_PATTERNS = ['temp', 'tmp', 'recording', 'rec_', '.part', '.tmp', '~', 'untitled', 'new recording', 'voice memo']
+TEMP_FILE_AGE_THRESHOLD = 30  # Seconds
+
+# Audio File Extensions
+AUDIO_EXTENSIONS = (".mp3", ".wav", ".m4a", ".flac", ".ogg")
+
+# Notification Settings
+NOTIFICATION_TIMEOUT_SUCCESS = 15  # Seconds
+NOTIFICATION_TIMEOUT_ERROR = 20    # Seconds
+NOTIFICATION_TIMEOUT_BATCH = 10    # Seconds
 
 # Initialize API clients
 openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -96,7 +108,7 @@ def show_success_notification(filename):
     show_notification(
         title="[SUCCESS] Voice Note Processed",
         message=f"Successfully transcribed and added to Notion:\n{filename}",
-        timeout=15,
+        timeout=NOTIFICATION_TIMEOUT_SUCCESS,
     )
 
 
@@ -105,7 +117,7 @@ def show_error_notification(filename, error_msg):
     show_notification(
         title="[ERROR] Voice Note Processing Failed",
         message=f"Failed to process: {filename}\nError: {error_msg}",
-        timeout=20,
+        timeout=NOTIFICATION_TIMEOUT_ERROR,
     )
 
 
@@ -113,26 +125,118 @@ def estimate_segment_duration_ms(
     audio_duration_ms, audio_channels, target_bitrate_kbps_str, max_size_bytes
 ):
     """Estimate optimal segment duration for audio chunking."""
+    if not target_bitrate_kbps_str or not audio_duration_ms or not max_size_bytes:
+        return None
+        
     try:
         target_bitrate_kbps = int(target_bitrate_kbps_str.replace("k", ""))
+        if target_bitrate_kbps <= 0:
+            print(f"Error: Target bitrate must be positive. Got: {target_bitrate_kbps_str}")
+            return None
     except ValueError:
         print(f"Error: Invalid target bitrate format: {target_bitrate_kbps_str}")
         return None
 
-    if target_bitrate_kbps <= 0:
-        print(f"Error: Target bitrate must be positive. Got: {target_bitrate_kbps_str}")
-        return None
-
     bytes_per_second_at_target_bitrate = (target_bitrate_kbps * 1000) / 8
-
-    if bytes_per_second_at_target_bitrate <= 0:
-        print("Error: Calculated bytes_per_second_at_target_bitrate is not positive.")
-        return None
-
     max_duration_seconds_for_chunk = max_size_bytes / bytes_per_second_at_target_bitrate
     estimated_chunk_duration_ms = math.floor(max_duration_seconds_for_chunk * 1000)
 
     return min(estimated_chunk_duration_ms, audio_duration_ms)
+
+
+def create_audio_chunks(file_path):
+    """Create audio chunks for transcription. Returns list of chunk file paths."""
+    if not os.path.exists(file_path):
+        print(f"Error: File not found: {file_path}")
+        return []
+        
+    # Clean up any existing temp chunks
+    if os.path.exists(TEMP_CHUNK_SUBDIR):
+        shutil.rmtree(TEMP_CHUNK_SUBDIR)
+    os.makedirs(TEMP_CHUNK_SUBDIR, exist_ok=True)
+
+    try:
+        # Load audio file
+        base_name, ext = os.path.splitext(os.path.basename(file_path))
+        audio = AudioSegment.from_file(file_path, format=ext[1:])
+        audio_duration_ms = len(audio)
+
+        # Estimate chunk duration
+        segment_duration_ms = estimate_segment_duration_ms(
+            audio_duration_ms, audio.channels, TARGET_BITRATE_KBPS, MAX_CHUNK_SIZE_BYTES
+        )
+
+        if not segment_duration_ms or segment_duration_ms <= 0:
+            print("Error: Could not estimate segment duration.")
+            return []
+
+        # Split audio into chunks
+        num_chunks = math.ceil(audio_duration_ms / segment_duration_ms)
+        print(f"Splitting into {num_chunks} chunks...")
+
+        chunk_files = []
+        for i in range(num_chunks):
+            start_ms = i * segment_duration_ms
+            end_ms = min((i + 1) * segment_duration_ms, audio_duration_ms)
+            if start_ms >= end_ms:
+                continue
+
+            chunk = audio[start_ms:end_ms]
+            chunk_file_path = os.path.join(TEMP_CHUNK_SUBDIR, f"chunk_{i:03d}.mp3")
+            chunk.export(chunk_file_path, format="mp3", bitrate=TARGET_BITRATE_KBPS)
+            chunk_files.append(chunk_file_path)
+
+        return chunk_files
+
+    except FileNotFoundError as e:
+        if "ffmpeg" in str(e).lower() or "ffprobe" in str(e).lower():
+            print("[ERROR] FFmpeg not found! Please install FFmpeg:")
+            print("  1. Open PowerShell as Administrator")
+            print("  2. Run: choco install ffmpeg")
+            print("  3. Restart your terminal")
+            print("  4. Test with: ffmpeg -version")
+        else:
+            print(f"Error: File not found - {e}")
+        return []
+    except Exception as e:
+        print(f"Error creating audio chunks: {e}")
+        return []
+
+
+def transcribe_chunks(chunk_files, service="groq"):
+    """Transcribe audio chunks using specified service."""
+    if not chunk_files:
+        return None
+
+    transcribed_texts = []
+    
+    try:
+        for i, chunk_file_path in enumerate(chunk_files):
+            print(f"Transcribing chunk {i + 1}/{len(chunk_files)} with {service.title()}...")
+            
+            with open(chunk_file_path, "rb") as audio_file_handle:
+                if service == "groq" and groq_api_key:
+                    transcript = groq_client.audio.transcriptions.create(
+                        model="whisper-large-v3-turbo",
+                        file=audio_file_handle,
+                        response_format="text"
+                    )
+                    transcribed_texts.append(transcript.strip())
+                elif service == "openai":
+                    transcript = client.audio.transcriptions.create(
+                        model="whisper-1", 
+                        file=audio_file_handle
+                    )
+                    transcribed_texts.append(transcript.text.strip())
+                else:
+                    print(f"Error: Unsupported transcription service: {service}")
+                    return None
+
+        return "\n\n".join(transcribed_texts)
+
+    except Exception as e:
+        print(f"Error during {service} transcription: {e}")
+        return None
 
 
 def transcribe_with_groq(file_path):
@@ -142,68 +246,14 @@ def transcribe_with_groq(file_path):
         return None
 
     print(f"Transcribing audio file with Groq: {file_path}")
-
-    # Clean up any existing temp chunks
-    if os.path.exists(TEMP_CHUNK_SUBDIR):
-        shutil.rmtree(TEMP_CHUNK_SUBDIR)
-    os.makedirs(TEMP_CHUNK_SUBDIR, exist_ok=True)
-
-    transcribed_texts = []
-    chunk_files = []
-
+    
     try:
-        # Load audio file
-        base_name, ext = os.path.splitext(os.path.basename(file_path))
-        audio = AudioSegment.from_file(file_path, format=ext[1:])
-        audio_duration_ms = len(audio)
-
-        # Estimate chunk duration
-        segment_duration_ms = estimate_segment_duration_ms(
-            audio_duration_ms, audio.channels, TARGET_BITRATE_KBPS, MAX_CHUNK_SIZE_BYTES
-        )
-
-        if not segment_duration_ms or segment_duration_ms <= 0:
-            print("Error: Could not estimate segment duration.")
-            return None
-
-        # Split audio into chunks
-        num_chunks = math.ceil(audio_duration_ms / segment_duration_ms)
-        print(f"Splitting into {num_chunks} chunks...")
-
-        for i in range(num_chunks):
-            start_ms = i * segment_duration_ms
-            end_ms = min((i + 1) * segment_duration_ms, audio_duration_ms)
-            if start_ms >= end_ms:
-                continue
-
-            chunk = audio[start_ms:end_ms]
-            chunk_file_path = os.path.join(TEMP_CHUNK_SUBDIR, f"chunk_{i:03d}.mp3")
-            chunk.export(chunk_file_path, format="mp3", bitrate=TARGET_BITRATE_KBPS)
-            chunk_files.append(chunk_file_path)
-
+        chunk_files = create_audio_chunks(file_path)
         if not chunk_files:
-            print("No audio chunks were generated.")
             return None
-
-        # Transcribe each chunk
-        print(f"Starting Groq transcription for {len(chunk_files)} chunks...")
-        for i, chunk_file_path in enumerate(chunk_files):
-            print(f"Transcribing chunk {i + 1}/{len(chunk_files)}...")
-            with open(chunk_file_path, "rb") as audio_file_handle:
-                transcript = groq_client.audio.transcriptions.create(
-                    model="whisper-large-v3-turbo",
-                    file=audio_file_handle,
-                    response_format="text"
-                )
-            transcribed_texts.append(transcript.strip())
-
-        # Combine all transcripts
-        full_transcript = "\n\n".join(transcribed_texts)
-        return full_transcript
-
-    except Exception as e:
-        print(f"Error during Groq transcription: {e}")
-        return None
+            
+        result = transcribe_chunks(chunk_files, service="groq")
+        return result
     finally:
         # Clean up temp chunks
         if os.path.exists(TEMP_CHUNK_SUBDIR):
@@ -212,6 +262,10 @@ def transcribe_with_groq(file_path):
 
 def transcribe_audio_file(file_path):
     """Transcribe audio file using Groq Whisper first, then OpenAI as fallback."""
+    if not file_path or not os.path.exists(file_path):
+        print(f"Error: Invalid file path: {file_path}")
+        return None
+        
     print(f"Transcribing audio file: {file_path}")
 
     # Try Groq first
@@ -221,69 +275,43 @@ def transcribe_audio_file(file_path):
 
     print("Groq failed, trying OpenAI...")
     
-    # Clean up any existing temp chunks
-    if os.path.exists(TEMP_CHUNK_SUBDIR):
-        shutil.rmtree(TEMP_CHUNK_SUBDIR)
-    os.makedirs(TEMP_CHUNK_SUBDIR, exist_ok=True)
-
-    transcribed_texts = []
-    chunk_files = []
-
     try:
-        # Load audio file
-        base_name, ext = os.path.splitext(os.path.basename(file_path))
-        audio = AudioSegment.from_file(file_path, format=ext[1:])
-        audio_duration_ms = len(audio)
-
-        # Estimate chunk duration
-        segment_duration_ms = estimate_segment_duration_ms(
-            audio_duration_ms, audio.channels, TARGET_BITRATE_KBPS, MAX_CHUNK_SIZE_BYTES
-        )
-
-        if not segment_duration_ms or segment_duration_ms <= 0:
-            print("Error: Could not estimate segment duration.")
-            return None
-
-        # Split audio into chunks
-        num_chunks = math.ceil(audio_duration_ms / segment_duration_ms)
-        print(f"Splitting into {num_chunks} chunks...")
-
-        for i in range(num_chunks):
-            start_ms = i * segment_duration_ms
-            end_ms = min((i + 1) * segment_duration_ms, audio_duration_ms)
-            if start_ms >= end_ms:
-                continue
-
-            chunk = audio[start_ms:end_ms]
-            chunk_file_path = os.path.join(TEMP_CHUNK_SUBDIR, f"chunk_{i:03d}.mp3")
-            chunk.export(chunk_file_path, format="mp3", bitrate=TARGET_BITRATE_KBPS)
-            chunk_files.append(chunk_file_path)
-
+        chunk_files = create_audio_chunks(file_path)
         if not chunk_files:
-            print("No audio chunks were generated.")
             return None
-
-        # Transcribe each chunk
-        print(f"Starting OpenAI transcription for {len(chunk_files)} chunks...")
-        for i, chunk_file_path in enumerate(chunk_files):
-            print(f"Transcribing chunk {i + 1}/{len(chunk_files)}...")
-            with open(chunk_file_path, "rb") as audio_file_handle:
-                transcript = client.audio.transcriptions.create(
-                    model="whisper-1", file=audio_file_handle
-                )
-            transcribed_texts.append(transcript.text.strip())
-
-        # Combine all transcripts
-        full_transcript = "\n\n".join(transcribed_texts)
-        return full_transcript
-
-    except Exception as e:
-        print(f"Error during OpenAI transcription: {e}")
-        return None
+            
+        result = transcribe_chunks(chunk_files, service="openai")
+        return result
     finally:
         # Clean up temp chunks
         if os.path.exists(TEMP_CHUNK_SUBDIR):
             shutil.rmtree(TEMP_CHUNK_SUBDIR)
+
+
+def load_processing_prompt():
+    """Load and process the summarization prompt template."""
+    # Load the post-processing prompt
+    if os.path.exists("scripts/processing_prompt.md"):
+        with open("scripts/processing_prompt.md", "r", encoding="utf-8") as f:
+            prompt_text = f.read()
+    elif os.path.exists(POST_PROCESSING_PROMPT_FILE):
+        with open(POST_PROCESSING_PROMPT_FILE, "r", encoding="utf-8") as f:
+            prompt_text = f.read()
+    else:
+        prompt_text = (
+            "Act as an expert meeting assistant. "
+            "Create a structured summary of voice note transcripts. "
+            "Include a title, key discussion points, and any action items mentioned. "
+            "Format the response in a clear, professional manner suitable for Notion."
+        )
+
+    # Replace company placeholders with environment variables
+    company_name = os.getenv("COMPANY_NAME", "your company")
+    company_shorthand = os.getenv("COMPANY_SHORTHAND", "your company")
+    prompt_text = prompt_text.replace("{COMPANY_NAME}", company_name)
+    prompt_text = prompt_text.replace("{COMPANY_SHORTHAND}", company_shorthand)
+    
+    return prompt_text
 
 
 def summarize_with_gemini(text):
@@ -291,26 +319,15 @@ def summarize_with_gemini(text):
     if not gemini_api_key:
         print("Warning: GEMINI_API_KEY not found, skipping Gemini summarization")
         return None
+    
+    if not text or not text.strip():
+        print("Error: No text provided for summarization")
+        return None
 
     print("Summarizing text with Gemini...")
     try:
         model = genai.GenerativeModel("gemini-2.5-pro")
-
-        # Load the post-processing prompt
-        if os.path.exists("scripts/processing_prompt.md"):
-            with open("scripts/processing_prompt.md", "r", encoding="utf-8") as f:
-                prompt_text = f.read()
-        elif os.path.exists(POST_PROCESSING_PROMPT_FILE):
-            with open(POST_PROCESSING_PROMPT_FILE, "r", encoding="utf-8") as f:
-                prompt_text = f.read()
-        else:
-            prompt_text = (
-                "Act as an expert meeting assistant. "
-                "Create a structured summary of the following voice note transcript. "
-                "Include a title, key discussion points, and any action items mentioned. "
-                "Format the response in a clear, professional manner suitable for Notion."
-            )
-
+        prompt_text = load_processing_prompt()
         response = model.generate_content(prompt_text + "\n\n" + text)
         return response.text
     except Exception as e:
@@ -320,23 +337,13 @@ def summarize_with_gemini(text):
 
 def summarize_with_openai(text):
     """Summarize text using OpenAI GPT-4 as fallback with post-processing prompt."""
+    if not text or not text.strip():
+        print("Error: No text provided for summarization")
+        return None
+        
     print("Summarizing text with OpenAI GPT-4...")
     try:
-        # Load the post-processing prompt
-        if os.path.exists("scripts/processing_prompt.md"):
-            with open("scripts/processing_prompt.md", "r", encoding="utf-8") as f:
-                prompt_text = f.read()
-        elif os.path.exists(POST_PROCESSING_PROMPT_FILE):
-            with open(POST_PROCESSING_PROMPT_FILE, "r", encoding="utf-8") as f:
-                prompt_text = f.read()
-        else:
-            prompt_text = (
-                "Act as an expert meeting assistant. "
-                "Create a structured summary of voice note transcripts. "
-                "Include a title, key discussion points, and any action items mentioned. "
-                "Format the response in a clear, professional manner suitable for Notion."
-            )
-
+        prompt_text = load_processing_prompt()
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -382,12 +389,24 @@ def save_backup_markdown(title, content, original_filename):
 
 def add_to_notion(title, content):
     """Add summarized content to Notion database."""
+    if not title or not title.strip():
+        print("Error: Title cannot be empty")
+        return None
+    
+    if not content or not content.strip():
+        print("Error: Content cannot be empty")
+        return None
+        
+    if not notion_database_id:
+        print("Error: NOTION_DATABASE_ID not configured")
+        return None
+
     print(f"Adding '{title}' to Notion...")
     try:
         meeting_date = datetime.now().strftime("%Y-%m-%d")
 
-        # Split content into chunks of 2000 characters to respect Notion's limit
-        max_chunk_size = 2000
+        # Split content into chunks to respect Notion's limit
+        max_chunk_size = NOTION_MAX_CHUNK_SIZE
         content_chunks = []
         
         for i in range(0, len(content), max_chunk_size):
@@ -419,31 +438,16 @@ def is_temp_file(file_path):
     """Check if a file is likely a temporary recording in progress."""
     filename = os.path.basename(file_path).lower()
     
-    # Common temp file patterns
-    temp_patterns = [
-        'temp',
-        'tmp',
-        'recording',
-        'rec_',
-        '.part',
-        '.tmp',
-        '~',
-        'untitled',
-        'new recording',
-        'voice memo'
-    ]
-    
     # Check if filename contains temp patterns
-    for pattern in temp_patterns:
+    for pattern in TEMP_FILE_PATTERNS:
         if pattern in filename:
             return True
     
-    # Check if file was modified very recently (within last 30 seconds)
-    # This catches files that might still be actively recording
+    # Check if file was modified very recently (might still be actively recording)
     try:
         file_mtime = os.path.getmtime(file_path)
         current_time = datetime.now().timestamp()
-        if current_time - file_mtime < 30:  # 30 seconds
+        if current_time - file_mtime < TEMP_FILE_AGE_THRESHOLD:
             return True
     except OSError:
         pass
@@ -453,6 +457,18 @@ def is_temp_file(file_path):
 
 def download_audio_file(url, temp_dir):
     """Download audio file from URL to temp directory."""
+    if not url or not url.strip():
+        print("Error: URL cannot be empty")
+        return None
+        
+    if not url.startswith(('http://', 'https://')):
+        print(f"Error: Invalid URL format: {url}")
+        return None
+        
+    if not temp_dir:
+        print("Error: Temp directory not specified")
+        return None
+
     try:
         # Create temp directory if it doesn't exist
         os.makedirs(temp_dir, exist_ok=True)
@@ -531,7 +547,7 @@ def get_available_files(folder_path=DEFAULT_VOICE_FOLDER):
     if not os.path.exists(folder_path):
         return []
     
-    audio_extensions = (".mp3", ".wav", ".m4a", ".flac", ".ogg")
+    audio_extensions = AUDIO_EXTENSIONS
     
     # Load processed files
     processed_files = set()
@@ -585,6 +601,15 @@ def mark_as_processed(file_path, processed_log):
 
 def process_file(file_path, processed_log):
     """Process a single audio file."""
+    if not file_path or not os.path.exists(file_path):
+        error_msg = f"File not found: {file_path}"
+        print(f"[ERROR] {error_msg}")
+        return False
+        
+    if not processed_log:
+        print("[ERROR] Processed log file path not specified")
+        return False
+
     print(f"Processing: {os.path.basename(file_path)}")
 
     try:
@@ -626,14 +651,14 @@ def process_file(file_path, processed_log):
                 show_error_notification(title, "Notion failed but backup saved")
             return True
         else:
-            error_msg = "Failed to transcribe and backup"
+            error_msg = "Failed to create backup"
             print(f"[ERROR] {error_msg}")
             show_error_notification(title, error_msg)
             return False
 
     except Exception as e:
-        error_msg = str(e)
-        print(f"[ERROR] Error processing {file_path}: {e}")
+        error_msg = f"Unexpected error: {str(e)}"
+        print(f"[ERROR] Error processing {file_path}: {error_msg}")
         show_error_notification(os.path.basename(file_path), error_msg)
         return False
 
@@ -662,6 +687,162 @@ def process_queue_item(item):
         return False
 
 
+def handle_show_queue():
+    """Show current queue contents."""
+    current_queue = load_queue()
+    if current_queue:
+        print(f"\n[QUEUE] Current queue ({len(current_queue)} items):")
+        for i, item in enumerate(current_queue, 1):
+            print(f"  {i}. {item}")
+    else:
+        print("[QUEUE] Queue is empty")
+
+
+def handle_clear_queue():
+    """Clear the processing queue."""
+    save_queue([])
+    print("[CLEAR] Queue cleared")
+
+
+def handle_process_next():
+    """Process the next item in queue."""
+    current_queue = load_queue()
+    if current_queue:
+        item = current_queue[0]
+        if process_queue_item(item):
+            remove_from_queue(item)
+            print(f"[SUCCESS] Successfully processed and removed: {item}")
+        else:
+            print(f"[ERROR] Failed to process: {item}")
+            response = input("Remove from queue anyway? (y/n): ").strip().lower()
+            if response in ['y', 'yes']:
+                remove_from_queue(item)
+    else:
+        print("[QUEUE] Queue is empty")
+
+
+def handle_process_all():
+    """Process all items in queue."""
+    current_queue = load_queue()
+    if not current_queue:
+        print("[QUEUE] Queue is empty")
+        return
+    
+    print(f"[RUNNING] Processing {len(current_queue)} items...")
+    success_count = 0
+    
+    for item in current_queue.copy():  # Copy to avoid modification during iteration
+        if process_queue_item(item):
+            remove_from_queue(item)
+            success_count += 1
+        else:
+            print(f"[ERROR] Failed to process: {item}")
+            response = input("Remove from queue anyway? (y/n): ").strip().lower()
+            if response in ['y', 'yes']:
+                remove_from_queue(item)
+    
+    print(f"\n[RESULTS] Results: {success_count}/{len(current_queue)} items processed successfully")
+    
+    # Show summary notification
+    if success_count > 0:
+        notification.notify(
+            title="[COMPLETE] Voice Note Processing Complete",
+            message=f"Successfully processed {success_count} items",
+            timeout=NOTIFICATION_TIMEOUT_BATCH,
+            app_name="Voice Note Processor",
+        )
+
+
+def handle_latest_file():
+    """Process the latest file from voice notes folder."""
+    latest_file = get_latest_file()
+    if latest_file:
+        filename = os.path.basename(latest_file)
+        print(f"\n[FILE] Latest file: {filename}")
+        response = input("Process this file? (y/n): ").strip().lower()
+        if response in ['y', 'yes']:
+            if process_queue_item(latest_file):
+                print(f"[SUCCESS] Successfully processed: {filename}")
+            else:
+                print(f"[ERROR] Failed to process: {filename}")
+        else:
+            print("Skipped")
+    else:
+        print("[ERROR] No unprocessed files found in voice notes folder")
+
+
+def handle_select_files():
+    """Select multiple files from voice notes folder."""
+    available_files = get_available_files()
+    if not available_files:
+        print("[ERROR] No unprocessed files found in voice notes folder")
+        return
+    
+    print(f"\n[FOLDER] Available files ({len(available_files)} total):")
+    selected_files = []
+    
+    for i, file_path in enumerate(available_files, 1):
+        filename = os.path.basename(file_path)
+        file_time = datetime.fromtimestamp(os.path.getmtime(file_path)).strftime('%Y-%m-%d %H:%M')
+        print(f"  {i}. {filename} ({file_time})")
+        
+        while True:
+            response = input(f"Select '{filename}'? (y/n): ").strip().lower()
+            if response in ['y', 'yes']:
+                selected_files.append(file_path)
+                print(f"[SUCCESS] Selected: {filename}")
+                break
+            elif response in ['n', 'no']:
+                print(f"[SKIP] Skipped: {filename}")
+                break
+            else:
+                print("Please enter 'y' or 'n'")
+    
+    if selected_files:
+        add_to_queue(selected_files)
+        print(f"\n[QUEUE] Added {len(selected_files)} files to queue")
+        print("Type 'p' to process selected files")
+    else:
+        print("No files selected")
+
+
+def handle_add_item(command):
+    """Add item to queue."""
+    item = command[4:].strip()
+    # Remove quotes if present
+    if item.startswith('"') and item.endswith('"'):
+        item = item[1:-1]
+    elif item.startswith("'") and item.endswith("'"):
+        item = item[1:-1]
+    if item:
+        add_to_queue([item])
+    else:
+        print("[ERROR] Please provide a file path or URL")
+
+
+def handle_direct_path(command):
+    """Handle direct file path processing."""
+    stripped_command = command.strip()
+    if stripped_command.startswith('"') and stripped_command.endswith('"'):
+        stripped_command = stripped_command[1:-1]
+    elif stripped_command.startswith("'") and stripped_command.endswith("'"):
+        stripped_command = stripped_command[1:-1]
+    
+    # Check if it's a file path
+    if (stripped_command and 
+        (os.path.exists(stripped_command) or 
+         stripped_command.startswith(('http://', 'https://')) or
+         (len(stripped_command) > 2 and stripped_command[1] == ':'))):  # Windows drive letter
+        
+        print(f"[PROCESSING] Processing file directly: {stripped_command}")
+        if process_queue_item(stripped_command):
+            print(f"[SUCCESS] Successfully processed: {os.path.basename(stripped_command)}")
+        else:
+            print(f"[ERROR] Failed to process: {os.path.basename(stripped_command)}")
+        return True
+    return False
+
+
 def interactive_mode():
     """Interactive mode for adding files and processing queue."""
     print("\n[INTERACTIVE] Interactive Mode - Voice Note Processor")
@@ -685,175 +866,23 @@ def interactive_mode():
             if command.lower() in ['quit', 'exit', 'q']:
                 print("[GOODBYE] Goodbye!")
                 break
-            
             elif command.lower() == 'queue':
-                current_queue = load_queue()
-                if current_queue:
-                    print(f"\n[QUEUE] Current queue ({len(current_queue)} items):")
-                    for i, item in enumerate(current_queue, 1):
-                        print(f"  {i}. {item}")
-                else:
-                    print("[QUEUE] Queue is empty")
-            
+                handle_show_queue()
             elif command.lower() == 'clear':
-                save_queue([])
-                print("[CLEAR] Queue cleared")
-            
+                handle_clear_queue()
             elif command.lower() == 'process':
-                current_queue = load_queue()
-                if current_queue:
-                    item = current_queue[0]
-                    if process_queue_item(item):
-                        remove_from_queue(item)
-                        print(f"[SUCCESS] Successfully processed and removed: {item}")
-                    else:
-                        print(f"[ERROR] Failed to process: {item}")
-                        response = input("Remove from queue anyway? (y/n): ").strip().lower()
-                        if response in ['y', 'yes']:
-                            remove_from_queue(item)
-                else:
-                    print("[QUEUE] Queue is empty")
-            
-            elif command.lower() == 'process_all':
-                current_queue = load_queue()
-                if not current_queue:
-                    print("[QUEUE] Queue is empty")
-                    continue
-                
-                print(f"[RUNNING] Processing {len(current_queue)} items...")
-                success_count = 0
-                
-                for item in current_queue.copy():  # Copy to avoid modification during iteration
-                    if process_queue_item(item):
-                        remove_from_queue(item)
-                        success_count += 1
-                    else:
-                        print(f"[ERROR] Failed to process: {item}")
-                        response = input("Remove from queue anyway? (y/n): ").strip().lower()
-                        if response in ['y', 'yes']:
-                            remove_from_queue(item)
-                
-                print(f"\n[RESULTS] Results: {success_count}/{len(current_queue)} items processed successfully")
-                
-                # Show summary notification
-                if success_count > 0:
-                    notification.notify(
-                        title="[COMPLETE] Voice Note Processing Complete",
-                        message=f"Successfully processed {success_count} items",
-                        timeout=10,
-                        app_name="Voice Note Processor",
-                    )
-            
+                handle_process_next()
+            elif command.lower() in ['process_all', 'p']:
+                handle_process_all()
             elif command.lower() == 'latest':
-                latest_file = get_latest_file()
-                if latest_file:
-                    filename = os.path.basename(latest_file)
-                    print(f"\n[FILE] Latest file: {filename}")
-                    response = input("Process this file? (y/n): ").strip().lower()
-                    if response in ['y', 'yes']:
-                        if process_queue_item(latest_file):
-                            print(f"[SUCCESS] Successfully processed: {filename}")
-                        else:
-                            print(f"[ERROR] Failed to process: {filename}")
-                    else:
-                        print("Skipped")
-                else:
-                    print("[ERROR] No unprocessed files found in voice notes folder")
-            
+                handle_latest_file()
             elif command.lower() == 'select':
-                available_files = get_available_files()
-                if not available_files:
-                    print("[ERROR] No unprocessed files found in voice notes folder")
-                    continue
-                
-                print(f"\n[FOLDER] Available files ({len(available_files)} total):")
-                selected_files = []
-                
-                for i, file_path in enumerate(available_files, 1):
-                    filename = os.path.basename(file_path)
-                    file_time = datetime.fromtimestamp(os.path.getmtime(file_path)).strftime('%Y-%m-%d %H:%M')
-                    print(f"  {i}. {filename} ({file_time})")
-                    
-                    while True:
-                        response = input(f"Select '{filename}'? (y/n): ").strip().lower()
-                        if response in ['y', 'yes']:
-                            selected_files.append(file_path)
-                            print(f"[SUCCESS] Selected: {filename}")
-                            break
-                        elif response in ['n', 'no']:
-                            print(f"[SKIP] Skipped: {filename}")
-                            break
-                        else:
-                            print("Please enter 'y' or 'n'")
-                
-                if selected_files:
-                    add_to_queue(selected_files)
-                    print(f"\n[QUEUE] Added {len(selected_files)} files to queue")
-                    print("Type 'p' to process selected files")
-                else:
-                    print("No files selected")
-            
-            elif command.lower() == 'p':
-                current_queue = load_queue()
-                if not current_queue:
-                    print("[QUEUE] Queue is empty")
-                    continue
-                
-                print(f"[RUNNING] Processing {len(current_queue)} items...")
-                success_count = 0
-                
-                for item in current_queue.copy():
-                    if process_queue_item(item):
-                        remove_from_queue(item)
-                        success_count += 1
-                    else:
-                        print(f"[ERROR] Failed to process: {item}")
-                        response = input("Remove from queue anyway? (y/n): ").strip().lower()
-                        if response in ['y', 'yes']:
-                            remove_from_queue(item)
-                
-                print(f"\n[RESULTS] Results: {success_count}/{len(current_queue)} items processed successfully")
-                
-                if success_count > 0:
-                    notification.notify(
-                        title="[COMPLETE] Voice Note Processing Complete",
-                        message=f"Successfully processed {success_count} items",
-                        timeout=10,
-                        app_name="Voice Note Processor",
-                    )
-            
+                handle_select_files()
             elif command.startswith('add '):
-                item = command[4:].strip()
-                # Remove quotes if present
-                if item.startswith('"') and item.endswith('"'):
-                    item = item[1:-1]
-                elif item.startswith("'") and item.endswith("'"):
-                    item = item[1:-1]
-                if item:
-                    add_to_queue([item])
-                else:
-                    print("[ERROR] Please provide a file path or URL")
-            
+                handle_add_item(command)
             else:
-                # Check if the command is a file path (starts with a drive letter or quote)
-                stripped_command = command.strip()
-                if stripped_command.startswith('"') and stripped_command.endswith('"'):
-                    stripped_command = stripped_command[1:-1]
-                elif stripped_command.startswith("'") and stripped_command.endswith("'"):
-                    stripped_command = stripped_command[1:-1]
-                
-                # Check if it's a file path
-                if (stripped_command and 
-                    (os.path.exists(stripped_command) or 
-                     stripped_command.startswith(('http://', 'https://')) or
-                     (len(stripped_command) > 2 and stripped_command[1] == ':'))):  # Windows drive letter
-                    
-                    print(f"[PROCESSING] Processing file directly: {stripped_command}")
-                    if process_queue_item(stripped_command):
-                        print(f"[SUCCESS] Successfully processed: {os.path.basename(stripped_command)}")
-                    else:
-                        print(f"[ERROR] Failed to process: {os.path.basename(stripped_command)}")
-                else:
+                # Try to handle as direct file path
+                if not handle_direct_path(command):
                     print("[ERROR] Unknown command. Type 'quit' to exit.")
         
         except KeyboardInterrupt:
@@ -944,7 +973,7 @@ def main():
             notification.notify(
                 title="[COMPLETE] Voice Note Processing Complete",
                 message=f"Successfully processed {success_count} items",
-                timeout=10,
+                timeout=NOTIFICATION_TIMEOUT_BATCH,
                 app_name="Voice Note Processor",
             )
         return
@@ -970,7 +999,7 @@ def main():
             notification.notify(
                 title="[COMPLETE] Voice Note Processing Complete",
                 message=f"Successfully processed {success_count} items",
-                timeout=10,
+                timeout=NOTIFICATION_TIMEOUT_BATCH,
                 app_name="Voice Note Processor",
             )
 

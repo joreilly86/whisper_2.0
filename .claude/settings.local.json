@@ -14,7 +14,10 @@
       "Bash(touch:*)",
       "Bash(where:*)",
       "Bash(schtasks:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(rg:*)",
+      "Bash(uv sync:*)"
     ],
     "deny": []
   }

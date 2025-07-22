@@ -5,26 +5,18 @@ description = "Audio transcription tool for Engineers"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    # Core processing
-    "openai-whisper>=20230314", # Transcription
+    # Audio processing
     "pydub>=0.25.1", # Audio manipulation
-    "torch>=2.0.0", # Whisper dependency
-    "numpy>=1.24.2", # Whisper dependency
-    "tqdm>=4.65.0", # Whisper dependency
-    # Summarization
-    "openai>=1.0.0", # OpenAI API
-    "anthropic>=0.5.0", # Anthropic API
-    "groq>=0.4.0", # Groq API
-    # Folder watching
-    "watchdog>=6.0.0", # File system monitoring
+    # AI Services
+    "openai>=1.0.0", # OpenAI API (includes Whisper API access)
+    "groq>=0.4.0", # Groq API for fast Whisper transcription
+    "google-generativeai>=0.7.1", # Gemini API
     # Configuration
     "python-dotenv>=1.0.0", # Loading .env files
-    # Database
-    "sqlalchemy>=2.0.9", # ORM and database interaction
-    "greenlet>=3.0.0", # Required by SQLAlchemy for async operations
-    "ipykernel>=6.29.5",
-    "google-generativeai>=0.7.1",
-    # Voice note monitoring with Notion integration
+    # Notion integration
     "notion-client>=2.0.0", # Notion API client
+    # Notifications
     "plyer>=2.1.0", # Cross-platform notifications
+    # Utilities
+    "requests>=2.31.0", # HTTP requests for file downloads
 ]

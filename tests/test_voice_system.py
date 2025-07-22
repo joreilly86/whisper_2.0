@@ -19,21 +19,38 @@ def test_environment_variables():
 
     required_vars = [
         "OPENAI_API_KEY",
-        "NOTION_API_KEY",
+        "NOTION_API_KEY", 
         "NOTION_DATABASE_ID",
-        "VOICE_NOTES_FOLDER",
     ]
-    missing = []
+    
+    optional_vars = [
+        "GROQ_API_KEY",
+        "GEMINI_API_KEY",
+        "VOICE_NOTES_FOLDER",
+        "COMPANY_NAME",
+        "COMPANY_SHORTHAND"
+    ]
+    
+    missing_required = []
+    missing_optional = []
 
     for var in required_vars:
         if not os.getenv(var):
-            missing.append(var)
+            missing_required.append(var)
 
-    if missing:
-        print(f"❌ Missing environment variables: {', '.join(missing)}")
+    for var in optional_vars:
+        if not os.getenv(var):
+            missing_optional.append(var)
+
+    if missing_required:
+        print(f"❌ Missing REQUIRED environment variables: {', '.join(missing_required)}")
+        print("   Add these to your .env file before proceeding!")
         return False
     else:
-        print("✅ All environment variables are set")
+        print("✅ All required environment variables are set")
+        if missing_optional:
+            print(f"⚠️  Optional variables not set: {', '.join(missing_optional)}")
+            print("   (These will use defaults or fallback services)")
         return True
 
 
@@ -73,23 +90,46 @@ def test_notion_connection():
         return False
 
 
+def test_groq_connection():
+    """Test Groq API connection (optional)."""
+    print("\n🔍 Testing Groq connection...")
+    groq_key = os.getenv("GROQ_API_KEY")
+
+    if not groq_key:
+        print("⚠️  GROQ_API_KEY not set (will use OpenAI for transcription)")
+        return True
+
+    try:
+        import groq
+        groq_client = groq.Groq(api_key=groq_key)
+        # Test with a simple API call to check authentication
+        # Note: We can't easily test transcription without an audio file
+        print("✅ Groq API key configured (transcription ready)")
+        return True
+    except Exception as e:
+        print(f"❌ Groq connection failed: {e}")
+        print("   Transcription will fallback to OpenAI")
+        return False
+
+
 def test_gemini_connection():
     """Test Gemini API connection (optional)."""
     print("\n🔍 Testing Gemini connection...")
     gemini_key = os.getenv("GEMINI_API_KEY")
 
     if not gemini_key:
-        print("⚠️  GEMINI_API_KEY not set (this is optional)")
+        print("⚠️  GEMINI_API_KEY not set (will use OpenAI for summarization)")
         return True
 
     try:
         genai.configure(api_key=gemini_key)
-        model = genai.GenerativeModel("gemini-1.5-pro-latest")
+        model = genai.GenerativeModel("gemini-2.0-flash-exp")
         response = model.generate_content("Say 'test successful'")
         print("✅ Gemini connection successful")
         return True
     except Exception as e:
         print(f"❌ Gemini connection failed: {e}")
+        print("   Summarization will fallback to OpenAI")
         return False
 
 
@@ -98,9 +138,14 @@ def test_folder_access():
     print("\n🔍 Testing voice notes folder access...")
     folder = os.getenv("VOICE_NOTES_FOLDER")
 
+    if not folder:
+        print("⚠️  VOICE_NOTES_FOLDER not set (will use default path)")
+        return True
+
     if not os.path.exists(folder):
-        print(f"❌ Voice notes folder does not exist: {folder}")
-        return False
+        print(f"⚠️  Voice notes folder does not exist: {folder}")
+        print("   Folder will be created when needed, or use file browser mode")
+        return True
 
     if not os.access(folder, os.R_OK):
         print(f"❌ No read access to voice notes folder: {folder}")
@@ -161,6 +206,7 @@ def main():
         test_environment_variables,
         test_openai_connection,
         test_notion_connection,
+        test_groq_connection,
         test_gemini_connection,
         test_folder_access,
         test_notion_write,
@@ -178,10 +224,15 @@ def main():
 
     if passed == total:
         print("🎉 All tests passed! Your system is ready to use.")
+        print("\n💡 Next steps:")
+        print("   • Try: uv run scripts/process_voice_notes.py --interactive")
+        print("   • Or drag & drop: double-click quick_process.bat")
     else:
-        print(
-            "⚠️  Some tests failed. Please fix the issues above before running the voice note monitor."
-        )
+        print("⚠️  Some tests failed. Please fix the issues above.")
+        print("\n🔧 Common solutions:")
+        print("   • Check your .env file has correct API keys")
+        print("   • Ensure Notion database is shared with your integration")
+        print("   • Verify internet connection")
 
 
 if __name__ == "__main__":

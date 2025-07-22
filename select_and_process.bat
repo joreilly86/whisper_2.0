@@ -7,7 +7,12 @@ echo =========================================
 echo.
 
 REM Set default voice notes folder
-set "DEFAULT_FOLDER=G:\My Drive\Voice Notes"
+REM Use environment variable if set, otherwise use fallback
+if defined VOICE_NOTES_FOLDER (
+    set "DEFAULT_FOLDER=%VOICE_NOTES_FOLDER%"
+) else (
+    set "DEFAULT_FOLDER=G:\My Drive\Voice Notes"
+)
 
 REM Create a PowerShell script to show file dialog
 set "PS_SCRIPT=%TEMP%\file_selector.ps1"
