@@ -173,59 +173,6 @@ def handle_process_all():
         )
 
 
-def handle_latest_file():
-    """Process the latest file from voice notes folder."""
-    latest_file = utils.get_latest_file()
-    if latest_file:
-        filename = os.path.basename(latest_file)
-        print(f"\n[FILE] Latest file: {filename}")
-        response = input("Process this file? (y/n): ").strip().lower()
-        if response in ["y", "yes"]:
-            if process_queue_item(latest_file):
-                print(f"[SUCCESS] Successfully processed: {filename}")
-            else:
-                print(f"[ERROR] Failed to process: {filename}")
-        else:
-            print("Skipped")
-    else:
-        print("[ERROR] No unprocessed files found in voice notes folder")
-
-
-def handle_select_files():
-    """Select multiple files from voice notes folder."""
-    available_files = utils.get_available_files()
-    if not available_files:
-        print("[ERROR] No unprocessed files found in voice notes folder")
-        return
-
-    print(f"\n[FOLDER] Available files ({len(available_files)} total):")
-    selected_files = []
-
-    for i, file_path in enumerate(available_files, 1):
-        filename = os.path.basename(file_path)
-        file_time = datetime.fromtimestamp(os.path.getmtime(file_path)).strftime(
-            "%Y-%m-%d %H:%M"
-        )
-        print(f"  {i}. {filename} ({file_time})")
-
-        while True:
-            response = input(f"Select '{filename}'? (y/n): ").strip().lower()
-            if response in ["y", "yes"]:
-                selected_files.append(file_path)
-                print(f"[SUCCESS] Selected: {filename}")
-                break
-            elif response in ["n", "no"]:
-                print(f"[SKIP] Skipped: {filename}")
-                break
-            else:
-                print("Please enter 'y' or 'n'")
-
-    if selected_files:
-        utils.add_to_queue(selected_files)
-        print(f"\n[QUEUE] Added {len(selected_files)} files to queue")
-        print("Type 'p' to process selected files")
-    else:
-        print("No files selected")
 
 
 def handle_add_item(command):
@@ -273,12 +220,10 @@ def interactive_mode():
     print("\n[INTERACTIVE] Interactive Mode - Voice Note Processor")
     print("Commands:")
     print("  add <file_or_url> - Add file or URL to queue")
-    print("  latest - Process the latest file from voice notes folder")
-    print("  select - Select files from voice notes folder")
     print("  queue - Show current queue")
     print("  process - Process next item in queue")
     print("  process_all - Process all items in queue")
-    print("  p - Process selected files")
+    print("  p - Process all items in queue")
     print("  clear - Clear the queue")
     print("  quit - Exit interactive mode")
     print("  OR: Paste file path directly to process immediately")
@@ -299,10 +244,6 @@ def interactive_mode():
                 handle_process_next()
             elif command.lower() in ["process_all", "p"]:
                 handle_process_all()
-            elif command.lower() == "latest":
-                handle_latest_file()
-            elif command.lower() == "select":
-                handle_select_files()
             elif command.startswith("add "):
                 handle_add_item(command)
             else:

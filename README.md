@@ -61,7 +61,6 @@ This tool is discussed as part of the [**Flocode Newsletter**](https://flocode.s
     - `GEMINI_API_KEY`: Your Google Gemini API key (for better summarization).
     - `NOTION_API_KEY`: Your Notion integration secret.
     - `NOTION_DATABASE_ID`: The ID of your Notion database.
-    - `VOICE_NOTES_FOLDER`: The full path to the folder where your voice notes are stored.
     - `COMPANY_NAME` (optional): Your company's name for personalizing meeting minutes (e.g. 'Flocode').
     - `COMPANY_SHORTHAND` (optional): A shorthand for your company (e.g. 'FC').
 

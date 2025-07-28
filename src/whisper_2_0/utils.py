@@ -151,38 +151,6 @@ def is_url(item):
     return item.startswith(("http://", "https://"))
 
 
-def get_available_files(folder_path=config.DEFAULT_VOICE_FOLDER):
-    """Get all available audio files in the folder, excluding processed ones."""
-    if not os.path.exists(folder_path):
-        return []
-
-    # Load processed files
-    processed_files = set()
-    if os.path.exists(config.PROCESSED_FILES_LOG):
-        with open(config.PROCESSED_FILES_LOG, "r", encoding="utf-8") as f:
-            processed_files = {line.strip() for line in f}
-
-    # Find all audio files
-    all_files = []
-    for ext in config.AUDIO_EXTENSIONS:
-        pattern = os.path.join(folder_path, f"*{ext}")
-        all_files.extend(glob.glob(pattern, recursive=False))
-
-    # Filter out processed files and temp files
-    available_files = []
-    for file_path in all_files:
-        if file_path not in processed_files and not is_temp_file(file_path):
-            available_files.append(file_path)
-
-    # Sort by modification time (newest first)
-    available_files.sort(key=os.path.getmtime, reverse=True)
-    return available_files
-
-
-def get_latest_file(folder_path=config.DEFAULT_VOICE_FOLDER):
-    """Get the latest unprocessed file in the folder."""
-    available_files = get_available_files(folder_path)
-    return available_files[0] if available_files else None
 
 
 def resolve_file_path(item):

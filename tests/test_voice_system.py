@@ -25,7 +25,6 @@ def test_environment_variables():
     optional_vars = [
         "GROQ_API_KEY",
         "GEMINI_API_KEY",
-        "VOICE_NOTES_FOLDER",
         "COMPANY_NAME",
         "COMPANY_SHORTHAND",
     ]
@@ -135,26 +134,6 @@ def test_gemini_connection():
         return False
 
 
-def test_folder_access():
-    """Test access to voice notes folder."""
-    print("\n🔍 Testing voice notes folder access...")
-    folder = os.getenv("VOICE_NOTES_FOLDER")
-
-    if not folder:
-        print("⚠️  VOICE_NOTES_FOLDER not set (will use default path)")
-        return True
-
-    if not os.path.exists(folder):
-        print(f"⚠️  Voice notes folder does not exist: {folder}")
-        print("   Folder will be created when needed, or use file browser mode")
-        return True
-
-    if not os.access(folder, os.R_OK):
-        print(f"❌ No read access to voice notes folder: {folder}")
-        return False
-
-    print(f"✅ Voice notes folder accessible: {folder}")
-    return True
 
 
 def test_notion_write():
@@ -210,7 +189,6 @@ def main():
         test_notion_connection,
         test_groq_connection,
         test_gemini_connection,
-        test_folder_access,
         test_notion_write,
     ]
 

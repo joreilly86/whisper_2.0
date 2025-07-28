@@ -20,7 +20,6 @@ BACKUP_FOLDER = "transcription_backups"
 QUEUE_FILE = "processing_queue.txt"
 PROCESSED_FILES_LOG = "processed_files.txt"
 TEMP_DOWNLOAD_DIR = "temp_downloads"
-DEFAULT_VOICE_FOLDER = os.getenv("VOICE_NOTES_FOLDER", r"G:\My Drive\Voice Notes")
 
 # Notion Configuration
 NOTION_MAX_CHUNK_SIZE = 2000  # Characters per block

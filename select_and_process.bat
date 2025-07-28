@@ -6,13 +6,8 @@ echo 🎤 Voice Note Processor - File Selection
 echo =========================================
 echo.
 
-REM Set default voice notes folder
-REM Use environment variable if set, otherwise use fallback
-if defined VOICE_NOTES_FOLDER (
-    set "DEFAULT_FOLDER=%VOICE_NOTES_FOLDER%"
-) else (
-    set "DEFAULT_FOLDER=G:\My Drive\Voice Notes"
-)
+REM Set default folder to user's Documents folder
+set "DEFAULT_FOLDER=%USERPROFILE%\Documents"
 
 REM Create a PowerShell script to show file dialog
 set "PS_SCRIPT=%TEMP%\file_selector.ps1"
