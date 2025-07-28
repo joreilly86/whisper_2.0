@@ -3,6 +3,10 @@ Configuration constants for the Voice Note Processor.
 """
 
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Audio Processing
 MAX_CHUNK_SIZE_BYTES = 24.5 * 1024 * 1024  # 24.5 MB
@@ -52,3 +56,30 @@ NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
 # Company Information
 COMPANY_NAME = os.getenv("COMPANY_NAME", "your company")
 COMPANY_SHORTHAND = os.getenv("COMPANY_SHORTHAND", "your company")
+
+# Configuration validation
+def validate_configuration():
+    """Validate that required configuration is present."""
+    errors = []
+    
+    # Check if .env file exists
+    if not os.path.exists('.env'):
+        errors.append("Error: .env file not found. Please copy .env.example to .env and configure your API keys.")
+        return errors
+    
+    # Check transcription API keys
+    if not OPENAI_API_KEY and not GROQ_API_KEY:
+        errors.append("Error: No transcription API key found. Please set either OPENAI_API_KEY or GROQ_API_KEY in .env file")
+    
+    # Check summarization API keys  
+    if not OPENAI_API_KEY and not GEMINI_API_KEY:
+        errors.append("Error: No summarization API key found. Please set either OPENAI_API_KEY or GEMINI_API_KEY in .env file")
+    
+    # Check Notion configuration
+    if not NOTION_API_KEY:
+        errors.append("Error: NOTION_API_KEY not found in .env file")
+    
+    if not NOTION_DATABASE_ID:
+        errors.append("Error: NOTION_DATABASE_ID not found in .env file")
+    
+    return errors

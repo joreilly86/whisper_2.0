@@ -79,3 +79,5 @@ Input: You will be provided the raw transcript with multiple speakers and minima
 
 
 Output: A complete and clean set of meeting minutes suitable for review by project stakeholders, they should be formatted neatly, ready to paste into a document or email (assuming MS Windows environment).
+
+IMPORTANT: Respond ONLY with the formatted meeting minutes. Do not include any conversational preamble, acknowledgments, or phrases like "Here are the meeting minutes" or "Based on the transcript". Start directly with the meeting content.

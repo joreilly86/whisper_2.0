@@ -31,6 +31,34 @@ def load_processing_prompt():
     return prompt_text
 
 
+def clean_ai_response(response_text):
+    """Clean AI response to remove conversational preamble."""
+    if not response_text:
+        return response_text
+    
+    # Common preamble patterns to remove
+    preamble_patterns = [
+        r"^(?:Of course[.,]?\s*)?Here (?:are|is) the meeting minutes?.*?(?:\n|$)",
+        r"^Based on the (?:provided )?transcript.*?(?:\n|$)",
+        r"^I'll (?:create|provide|generate).*?meeting minutes?.*?(?:\n|$)",
+        r"^(?:Certainly[.,]?\s*)?(?:Here's|Here are).*?(?:summary|minutes?).*?(?:\n|$)",
+        r"^(?:Sure[.,]?\s*)?(?:I'll|Let me).*?(?:summarize|create).*?(?:\n|$)",
+        r"^(?:Absolutely[.,]?\s*)?(?:Here's|Here are) (?:a |the )?(?:clean |structured )?(?:meeting )?(?:summary|minutes?).*?(?:\n|$)",
+    ]
+    
+    cleaned_text = response_text.strip()
+    
+    # Remove preamble patterns
+    import re
+    for pattern in preamble_patterns:
+        cleaned_text = re.sub(pattern, "", cleaned_text, flags=re.IGNORECASE | re.MULTILINE)
+    
+    # Remove any leading whitespace/newlines after cleaning
+    cleaned_text = cleaned_text.strip()
+    
+    return cleaned_text
+
+
 def summarize_with_gemini(text):
     """Summarize text using Gemini API with post-processing prompt."""
     if not api_clients.genai_client:
@@ -46,7 +74,7 @@ def summarize_with_gemini(text):
         model = api_clients.genai_client.GenerativeModel("gemini-2.5-pro")
         prompt_text = load_processing_prompt()
         response = model.generate_content(prompt_text + "\n\n" + text)
-        return response.text
+        return clean_ai_response(response.text)
     except Exception as e:
         print(f"Error during Gemini summarization: {e}")
         return None
@@ -68,7 +96,7 @@ def summarize_with_openai(text):
                 {"role": "user", "content": text},
             ],
         )
-        return response.choices[0].message.content.strip()
+        return clean_ai_response(response.choices[0].message.content.strip())
     except Exception as e:
         print(f"Error during OpenAI summarization: {e}")
         return None

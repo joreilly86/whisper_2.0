@@ -318,6 +318,14 @@ def interactive_mode():
 
 
 def main():
+    # Validate configuration before starting
+    config_errors = config.validate_configuration()
+    if config_errors:
+        for error in config_errors:
+            print(error)
+        print("\nPlease fix the configuration issues above before running the application.")
+        return 1
+    
     # Clean up temp download directory on startup
     if os.path.exists(config.TEMP_DOWNLOAD_DIR):
         shutil.rmtree(config.TEMP_DOWNLOAD_DIR)
@@ -346,11 +354,11 @@ def main():
     if args.clear_queue:
         utils.save_queue([])
         print("[CLEAR] Queue cleared")
-        return
+        return 0
 
     if args.show_queue:
         handle_show_queue()
-        return
+        return 0
 
     # Add files to queue
     if args.files:
@@ -358,17 +366,17 @@ def main():
 
         if args.queue_only:
             print(f"[QUEUE] Added {len(args.files)} items to queue")
-            return
+            return 0
 
     # Process queue
     if args.process_queue:
         handle_process_all()
-        return
+        return 0
 
     # Interactive mode
     if args.interactive or (not args.files and not args.process_queue):
         interactive_mode()
-        return
+        return 0
 
     # Default: add files and process them
     if args.files:
@@ -390,7 +398,11 @@ def main():
                 message=f"Successfully processed {success_count} items",
                 timeout=config.NOTIFICATION_TIMEOUT_BATCH,
             )
+    
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    exit_code = main()
+    if exit_code:
+        sys.exit(exit_code)
