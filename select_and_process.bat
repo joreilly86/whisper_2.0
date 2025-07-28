@@ -2,8 +2,8 @@
 setlocal enabledelayedexpansion
 
 echo.
-echo 🎤 Voice Note Processor - File Selection
-echo =========================================
+echo Voice Note Processor - File Selection
+echo =====================================
 echo.
 
 REM Set default folder to user's Documents folder
@@ -26,7 +26,7 @@ echo     Write-Output "CANCELLED" >> "%PS_SCRIPT%"
 echo } >> "%PS_SCRIPT%"
 
 REM Run PowerShell script to get selected file
-echo 📁 Opening file selector...
+echo Opening file selector...
 for /f "delims=" %%i in ('powershell -ExecutionPolicy Bypass -File "%PS_SCRIPT%"') do set "SELECTED_FILE=%%i"
 
 REM Clean up temp file
@@ -35,7 +35,7 @@ del "%PS_SCRIPT%"
 REM Check if user cancelled
 if "!SELECTED_FILE!" == "CANCELLED" (
     echo.
-    echo ❌ File selection cancelled.
+    echo [ERROR] File selection cancelled.
     echo.
     pause
     exit /b 1
@@ -44,22 +44,22 @@ if "!SELECTED_FILE!" == "CANCELLED" (
 REM Check if file was selected
 if "!SELECTED_FILE!" == "" (
     echo.
-    echo ❌ No file selected.
+    echo [ERROR] No file selected.
     echo.
     pause
     exit /b 1
 )
 
 echo.
-echo 📄 Selected file: !SELECTED_FILE!
+echo Selected file: !SELECTED_FILE!
 echo.
-echo 🚀 Processing voice note...
+echo Processing voice note...
 echo.
 
 REM Process the selected file
 uv run scripts\process_voice_notes.py "!SELECTED_FILE!"
 
 echo.
-echo ✅ Processing complete!
+echo [SUCCESS] Processing complete!
 echo.
 pause
