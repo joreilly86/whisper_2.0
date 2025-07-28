@@ -115,7 +115,7 @@ uv run python tests/test_voice_system.py
 **Drag & Drop Processing:**
 1. Create a desktop shortcut to `quick_process.bat`
 2. Drag your audio file onto the shortcut
-3. Watch the magic happen! ✨
+3. Get notified of successfull completion ✨
 
 ### 🔄 Interactive Mode
 
