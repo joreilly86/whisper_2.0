@@ -2,7 +2,6 @@
 """Test suite for voice note monitoring system components."""
 
 import os
-import sys
 from datetime import datetime
 from dotenv import load_dotenv
 from notion_client import Client
@@ -19,18 +18,18 @@ def test_environment_variables():
 
     required_vars = [
         "OPENAI_API_KEY",
-        "NOTION_API_KEY", 
+        "NOTION_API_KEY",
         "NOTION_DATABASE_ID",
     ]
-    
+
     optional_vars = [
         "GROQ_API_KEY",
         "GEMINI_API_KEY",
         "VOICE_NOTES_FOLDER",
         "COMPANY_NAME",
-        "COMPANY_SHORTHAND"
+        "COMPANY_SHORTHAND",
     ]
-    
+
     missing_required = []
     missing_optional = []
 
@@ -43,7 +42,9 @@ def test_environment_variables():
             missing_optional.append(var)
 
     if missing_required:
-        print(f"❌ Missing REQUIRED environment variables: {', '.join(missing_required)}")
+        print(
+            f"❌ Missing REQUIRED environment variables: {', '.join(missing_required)}"
+        )
         print("   Add these to your .env file before proceeding!")
         return False
     else:
@@ -60,7 +61,7 @@ def test_openai_connection():
     try:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         # Simple test call
-        response = client.chat.completions.create(
+        client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": "Say 'test successful'"}],
             max_tokens=10,
@@ -101,7 +102,8 @@ def test_groq_connection():
 
     try:
         import groq
-        groq_client = groq.Groq(api_key=groq_key)
+
+        groq.Groq(api_key=groq_key)
         # Test with a simple API call to check authentication
         # Note: We can't easily test transcription without an audio file
         print("✅ Groq API key configured (transcription ready)")
@@ -124,7 +126,7 @@ def test_gemini_connection():
     try:
         genai.configure(api_key=gemini_key)
         model = genai.GenerativeModel("gemini-2.0-flash-exp")
-        response = model.generate_content("Say 'test successful'")
+        model.generate_content("Say 'test successful'")
         print("✅ Gemini connection successful")
         return True
     except Exception as e:
@@ -166,7 +168,7 @@ def test_notion_write():
         test_title = f"Test Entry - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         meeting_date = datetime.now().strftime("%Y-%m-%d")
 
-        response = notion.pages.create(
+        notion.pages.create(
             parent={"database_id": database_id},
             properties={
                 "Title": {"title": [{"text": {"content": test_title}}]},

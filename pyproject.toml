@@ -19,4 +19,18 @@ dependencies = [
     "plyer>=2.1.0", # Cross-platform notifications
     # Utilities
     "requests>=2.31.0", # HTTP requests for file downloads
+    "ruff",
+    "black",
 ]
+
+[project.scripts]
+whisper2 = "whisper_2_0.main:main"
+
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+line-length = 88
+
+[tool.setuptools.packages.find]
+where = ["src"]
